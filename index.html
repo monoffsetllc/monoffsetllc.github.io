@@ -139,7 +139,7 @@ window.MO_APP_URL = "https://app.monoffset.com/";
     return Promise.resolve(false);
   }
   // вэб хуудсанд iframe-ээр шигтгэсэн бол (?embed) компанийн толгойг нуух
-  try { if (GAS && google.script.url && google.script.url.getLocation) google.script.url.getLocation(function(l){ if (l && l.parameter && "embed" in l.parameter) document.documentElement.classList.add("embed"); }); } catch(e){}
+  try { if (GAS && google.script.url && google.script.url.getLocation) google.script.url.getLocation(function(l){ if (l && l.parameter && "embed" in l.parameter) document.documentElement.classList.add("embed"); var pr = l && l.parameter || {}; try { if (/^[A-Za-z2-9]{6}$/.test(pr.ref || "")) localStorage.setItem("mo_kRef", JSON.stringify(String(pr.ref).toUpperCase())); if (/^[0-9a-f]{32}$/.test(pr.rk || "") && /^[A-Za-z2-9]{6}$/.test(pr.rc || "")){ localStorage.setItem("mo_kRefKey", JSON.stringify(pr.rk)); localStorage.setItem("mo_kRefCode", JSON.stringify(String(pr.rc).toUpperCase())); } } catch(e){} }); } catch(e){}
   var ownerP = null;
   function isOwner(){
     if (ownerP) return ownerP;
@@ -441,6 +441,7 @@ nav button.on{background:#5a5446;color:#fff}
       <button data-tab="new">Орчуулга</button>
       <button data-tab="reg">Бүртгэл</button>
       <button data-tab="audit">Шалгалт<span id="audBadge" class="badge" hidden></span></button>
+      <button data-tab="ref">Урамшуулал</button>
       <button data-tab="set">Тохиргоо</button>
     </nav>
   </div>
@@ -466,6 +467,7 @@ nav button.on{background:#5a5446;color:#fff}
         <button id="myGo" class="btn primary wide">Хайх</button>
         <p id="myStatus" class="status" aria-live="polite"></p>
       </div>
+      <div id="myRef"></div>
       <div id="myDrafts"></div>
       <div id="myList"></div>
       <div id="myView"></div>
@@ -559,25 +561,29 @@ nav button.on{background:#5a5446;color:#fff}
 </section>
 
 <!-- ================= ADMIN: SETTINGS ================= -->
+<section id="tab-ref" class="tab"><div class="narrow" style="max-width:820px"><div class="card"><h2>Санал болгогчдын урамшуулал</h2><p class="hint">Харилцагчийн төлбөрийг «Батлав» гэж баталгаажуулах бүрт санал болгогчид автоматаар бодогдоно. Хувь хэмжээ, доод дүнг Тохиргоо хэсгээс өөрчилнө.</p><div id="refList"></div></div></div></section>
 <section id="tab-set" class="tab">
   <div class="narrow">
     <div class="card">
-      <h2>Үнийн тариф (1 үгийн үнэ, ₮)</h2>
-      <p class="hint">Нүүрийн үнэ = нэг нүүрийн дундаж үг × 1 үгийн үнэ. Зорилтот нүүрийн үнээс ±10% дотор бол зорилтот үнээр, үгүй бол аравтаар бөөрөнхийлнө. Нийт = нүүрийн үнэ × нүүр. Үнэ оруулаагүй хэлэнд утсаар холбогдохыг санал болгоно.</p>
-      <div class="price-grid" id="priceGrid"></div>
+      <h2>Үнийн тариф (НӨАТ ороогүй, ₮)</h2>
+      <p class="hint">Эх материал доорх «Орчуулгын маягтууд» жагсаалтад байвал загварт орсон орчуулгын тарифаар (1 нүүр), байхгүй бол стандарт нүүрээр тооцно. Эх материалын нүүр бүрийг тусад нь бодож, стандарт нүүрийн тэмдэгтээс давсан хэсгийг нэмэлт нүүр гэж тооцно.</p>
+      <div class="grid2">
+        <label class="f">Загварт орсон орчуулга, 1 нүүр<input id="pTplP" inputmode="numeric"></label>
+        <label class="f">1 стандарт нүүр = тэмдэгтээс илүүгүй (хоосон зай орно)<input id="pStdC" inputmode="numeric"></label>
+        <label class="f">Монгол ↔ бусад хэл, 1 стандарт нүүр<input id="pMnP" inputmode="numeric"></label>
+        <label class="f">Бусад хэл хооронд (Монгол хэлгүй), 1 стандарт нүүр<input id="pFFP" inputmode="numeric"></label>
+      </div>
       <div class="grid2" style="margin-top:12px">
         <label class="f">Орчуулга баталгаажуулалт (харилцагчийн орчуулсан), 1 стандарт нүүр<input id="pCert" inputmode="numeric"></label>
-        <label class="f">1 стандарт нүүр = үг<input id="pStd" inputmode="numeric"></label>
+        <label class="f">Баталгаажуулалт: 1 стандарт нүүр = үг<input id="pStd" inputmode="numeric"></label>
         <label class="f">Баталгаажуулах орчуулгын 1 алдаа засах<input id="pFix" inputmode="numeric"></label>
         <label class="f">Доод хураамж<input id="pMin" inputmode="numeric"></label>
-        <label class="f">Гадаад хэлнээс гадаад хэл рүү доод хураамж<input id="pMinF" inputmode="numeric"></label>
+        <label class="f">Санал болгогчийн урамшуулал, % (огнооноос өмнө)<input id="pRef1" inputmode="numeric"></label>
+        <label class="f">Санал болгогчийн урамшуулал, % (огнооноос хойш)<input id="pRef2" inputmode="numeric"></label>
+        <label class="f">Урамшуулал өөрчлөгдөх огноо<input id="pRefD" type="date"></label>
+        <label class="f">Урамшуулал олгох доод дүн<input id="pRefMin" inputmode="numeric"></label>
         <label class="f">Хүргэлтийн төлбөр<input id="pCourier" inputmode="numeric"></label>
         <label class="f">Үнэгүй хүргэлтийн босго (дээш)<input id="pFree" inputmode="numeric"></label>
-      </div>
-      <div class="grid2">
-        <label class="f">Зорилтот нүүрийн үнэ (150₮/үг үед)<input id="pTarget" inputmode="numeric"></label>
-        <label class="f">Их хэмжээ: дээш нүүр<input id="pBulkP" inputmode="numeric"></label>
-        <label class="f">Их хэмжээнд 1 үгийн хөнгөлөлт, ₮<input id="pBulkO" inputmode="numeric"></label>
       </div>
       <label class="f">1 сар өнгөрсөн орчуулгыг дахин нээх төлбөр<input id="pReopen" inputmode="numeric"></label>
     </div>
@@ -681,7 +687,7 @@ const pad2 = n => String(n).padStart(2, "0");
 const today = () => { const d = new Date(); return `${d.getFullYear()}.${pad2(d.getMonth()+1)}.${pad2(d.getDate())}`; };
 const S = { dir:"toMN", src:"Англи", mode:"img", images:[], pages:[""], num:"", date:today(), name:"", phone:"", email:"", seal:true, savedNum:null, orderUid:null };
 const C = { prefix:"MO26", last:0, translator:"", autoOn:true };
-const P = { to:{}, from:{}, cert:0, min:0, courier:15000, freeOver:200000, reopen:0, stdWords:600, fixPerError:2500, expressFee:0, expressHours:1, keepSrcDays:30, pageTarget:35000, risk:5, bulkPages:20, bulkOff:10 };
+const P = { to:{}, from:{}, cert:0, min:0, courier:15000, freeOver:200000, reopen:0, stdWords:600, fixPerError:2500, expressFee:0, expressHours:1, keepSrcDays:30, pageTarget:35000, risk:5, bulkPages:20, bulkOff:10, tplPage:15000, pageMn:25000, pageFF:40000, stdChars:1800 };
 const BANK = { bank:"Голомт банк", holder:"Мон-Оффсет ХХК", acc:"81001500 1801136049", pickup:"4-р хороолол, Парадоксын автобусны буудал, U&K тауэр" };
 const B = { stamp:null, logo:null, emblem:null };
 const BUILTIN_TPL = [
@@ -753,6 +759,7 @@ async function orderSet(uid, data){
 async function orderUpd(uid, patch){
   patch.updatedAt = Date.now();
   try { if (uid === UID && (!OWNER || CUSTVIEW)) phoneAlert(patch); } catch(e){}
+  try { if (OWNER && patch.status === "paid"){ const ox = ORDERS.find(x => x.uid === uid); if (ox && ox.ref) setTimeout(() => refCredit({ ...ox, ...patch }), 0); } } catch(e){}
   if (DB){ await DB.doc("orders/"+uid).update(patch); return; }
   const o = localOrders(); o[uid] = { ...(o[uid]||{}), ...patch }; LS.set("orders", o); notifyLocal();
 }
@@ -1583,7 +1590,7 @@ ${draft}${o.text != null ? "\n\nSOURCE TEXT:\n" + o.text : ""}`;
 function analysisPrompt(n, extra){
   extra = extra || {};
   return `A customer of a certified translation bureau uploaded ${n} page image(s) of one document${extra.passport ? " (the LAST attached image is the customer's foreign passport, not part of the document)" : ""}.${extra.kind ? ` The customer says the document type is: ${extra.kind}.` : ""} Inspect them and reply with JSON only:
-{"docType":"<short description of the document in Mongolian>","languages":["<every language the document's content is written in, using these Mongolian names: Монгол, ${LANGS.join(", ")}>"],"bilingual":<true if the same information is given in more than one language>,"consistent":null,"differences":[],"readable":<true if all pages are legible>,"handwrittenItems":[<each piece of HANDWRITTEN translatable content, quoted briefly with where it is, e.g. "date 2024.03.05 written by pen in the issue box"; empty array if none. Never list signatures, initials, stamps, seals, printed text, typed text or decorative/script fonts>],"handwritten":<true ONLY if information that must be translated (names, numbers, dates, entries, notes) is written by hand, not printed. Signatures, initials, autographs, stamps and seals NEVER count as handwriting — a document whose only handwriting is signatures is false>,"wordsPerPage":[<for each attached page image, in order: the number of words of running text on it, counting every word including headings, table cells, stamp text and numbers — but ignoring any phone/app screen interface (status bar, file name, buttons, pop-ups) and NOT counting content already shown in an earlier image (overlapping screenshots), so repeated content is counted once>],"docPages":<the number of DISTINCT document pages shown in the images: if screenshots overlap or show the same page twice, count each real document page once and do not count the repeated part again; equals the number of images when nothing repeats>,"note":"<one short sentence in Mongolian for the customer about anything else worth knowing, or empty>","docKind":"<the closest of: ${DOC_KINDS.join(" | ")}>","alreadyEnglish":<true only if this is a document that is already issued in English and normally needs no translation: the e-Mongolia civil registration reference Form И-17, a driver's licence or its reference, a foreign passport, or a bilingual professional diploma>,"minor":<true if the document is mainly about a person under 18, e.g. a child's birth certificate or a pupil's school file>,"templateIndex":<index of the matching bureau template from this list, or -1: ${(TPL || []).map((t, i) => `${i}=${t.name}`).join("; ") || "none"}>,"searchTerms":["<2–3 short distinctive title phrases of this document type as they would appear in an earlier translation, in the TARGET language of a typical order (English for Mongolian documents, Mongolian for foreign documents), written the way a Mongolian translation bureau titles such documents in English, e.g. "STATE REGISTRATION CERTIFICATE LEGAL ENTITY", "REGISTRATION OF ADDITIONAL CHANGES", "CERTIFICATE OF OWNERSHIP IMMOVABLE PROPERTY", "BIRTH CERTIFICATE", "ТӨРСНИЙ ГЭРЧИЛГЭЭ">"],"names":[<only if the document is in Mongolian Cyrillic: each distinct person's full name as {"mn":"<as printed, Cyrillic>","latin":["<MNS 5217:2012 romanization, long vowels written once: яа→ya, еэ→ye, ёо→yo, юу→yu, ү→u, ө→u, х→kh, ц→ts, ч→ch, ш→sh, ж→j>","<a common variant, if any>"]${extra.passport ? ",\"passport\":\"<the spelling in the passport MRZ/Latin field if this person is the passport holder, else empty>\"" : ""}}]>}`;
+{"docType":"<short description of the document in Mongolian>","languages":["<every language the document's content is written in, using these Mongolian names: Монгол, ${LANGS.join(", ")}>"],"bilingual":<true if the same information is given in more than one language>,"consistent":null,"differences":[],"readable":<true if all pages are legible>,"handwrittenItems":[<each piece of HANDWRITTEN translatable content, quoted briefly with where it is, e.g. "date 2024.03.05 written by pen in the issue box"; empty array if none. Never list signatures, initials, stamps, seals, printed text, typed text or decorative/script fonts>],"handwritten":<true ONLY if information that must be translated (names, numbers, dates, entries, notes) is written by hand, not printed. Signatures, initials, autographs, stamps and seals NEVER count as handwriting — a document whose only handwriting is signatures is false>,"wordsPerPage":[<for each attached page image, in order: the number of words of running text on it, counting every word including headings, table cells, stamp text and numbers — but ignoring any phone/app screen interface (status bar, file name, buttons, pop-ups) and NOT counting content already shown in an earlier image (overlapping screenshots), so repeated content is counted once>],"charsPerPage":[<for each attached page image, in order: the number of characters of translatable text on it INCLUDING spaces (letters, digits, punctuation, spaces between words), with the same exclusions and de-duplication as wordsPerPage>],"docPages":<the number of DISTINCT document pages shown in the images: if screenshots overlap or show the same page twice, count each real document page once and do not count the repeated part again; equals the number of images when nothing repeats>,"note":"<one short sentence in Mongolian for the customer about anything else worth knowing, or empty>","docKind":"<the closest of: ${DOC_KINDS.join(" | ")}>","alreadyEnglish":<true only if this is a document that is already issued in English and normally needs no translation: the e-Mongolia civil registration reference Form И-17, a driver's licence or its reference, a foreign passport, or a bilingual professional diploma>,"minor":<true if the document is mainly about a person under 18, e.g. a child's birth certificate or a pupil's school file>,"templateIndex":<index of the matching bureau template from this list, or -1: ${(TPL || []).map((t, i) => `${i}=${t.name}`).join("; ") || "none"}>,"searchTerms":["<2–3 short distinctive title phrases of this document type as they would appear in an earlier translation, in the TARGET language of a typical order (English for Mongolian documents, Mongolian for foreign documents), written the way a Mongolian translation bureau titles such documents in English, e.g. "STATE REGISTRATION CERTIFICATE LEGAL ENTITY", "REGISTRATION OF ADDITIONAL CHANGES", "CERTIFICATE OF OWNERSHIP IMMOVABLE PROPERTY", "BIRTH CERTIFICATE", "ТӨРСНИЙ ГЭРЧИЛГЭЭ">"],"names":[<only if the document is in Mongolian Cyrillic: each distinct person's full name as {"mn":"<as printed, Cyrillic>","latin":["<MNS 5217:2012 romanization, long vowels written once: яа→ya, еэ→ye, ёо→yo, юу→yu, ү→u, ө→u, х→kh, ц→ts, ч→ch, ш→sh, ж→j>","<a common variant, if any>"]${extra.passport ? ",\"passport\":\"<the spelling in the passport MRZ/Latin field if this person is the passport holder, else empty>\"" : ""}}]>}`;
 }
 const SERR = {
   not_granted:"AI ашиглах зөвшөөрөл өгөөгүй байна.", rate_limited:"Хэт олон хүсэлт илгээгдлээ. Түр хүлээгээд дахин оролдоно уу.",
@@ -1828,12 +1835,18 @@ const FAQ = [
  ["Ямар баримт орчуулдаг вэ?","Иргэний бүртгэл, үл хөдлөх хөрөнгө, хуулийн этгээд, банк, боловсрол, гэрээ, итгэмжлэл зэрэг бүх төрлийн баримт. Зураг, PDF, Word ямар ч файлаар хүлээн авна."],
  ["Ямар хэл рүү орчуулдаг вэ?","Монголоос англи, солонгос, орос, хятад, япон, герман, франц зэрэг хэл рүү, мөн эдгээр хэлнээс монгол руу."],
  ["Хэдий хугацаанд бэлэн болох вэ?","Төлбөр баталгаажсаны дараа нэг хуудсанд ойролцоогоор 2–3 минутад ноорог бэлэн болно. Манай хяналт шаардсан баримт ажлын цагт 1–24 цагт гарна. Яаралтай үйлчилгээ сонгож болно."],
- ["Үнэ хэрхэн тооцогдох вэ?","Үгийн тоо, нүүр, хэлээс хамаарна."],
+ ["Үнэ хэрхэн тооцогдох вэ?", () => `Таны баримт манай загварт орсон төрлийн баримт (иргэний үнэмлэх, төрсний гэрчилгээ, гэрчилгээ гэх мэт) бол 1 нүүр нь ${money(Number(P.tplPage) || 15000)}.\nБусад баримт стандарт нүүрээр тооцогдоно (1 стандарт нүүр = ${(Number(P.stdChars) || 1800).toLocaleString("en-US")} тэмдэгт хүртэл, хоосон зай орно):\n• Монгол хэлнээс бусад хэл рүү, бусад хэлнээс Монгол руу — ${money(Number(P.pageMn) || 25000)}\n• Монгол хэлгүй, гадаад хэл хооронд — ${money(Number(P.pageFF) || 40000)}\nҮнэ НӨАТ ороогүй. Материалаа оруулмагц яг үнийн санал шууд гарна.`],
  ["Өөрийн орчуулгаа баталгаажуулж болох уу?","Болно. «Баталгаажуулалт» сонгоод эх материал, орчуулгаа хамт оруулна. Алдаа илэрвэл засуулах үнийн санал авч болно."],
  ["Паспортоо оруулах шаардлагатай юу?","Үгүй. Нэрийн бичлэгийг паспорттой ижил болгох бол паспортын зургаа оруулж болно."],
  ["И-17 лавлагаа, жолооны үнэмлэх орчуулуулах хэрэгтэй юу?","Ихэвчлэн үгүй. Эдгээр нь аль хэдийн англиар олгогддог тул илгээвэл бид мэдэгдэнэ."],
  ["Алдаа гарвал яах вэ?","Хүлээн авснаас хойш 14 хоногийн дотор «Миний орчуулга» хэсгээс алдааг мэдэгдэхэд үнэгүй засна."],
  ["Мэдээлэл маань хамгаалагдсан уу?","Таны материалыг зөвхөн орчуулгад ашиглана. Дэлгэрэнгүйг нууцлалын бодлогоос үзнэ үү."],
+ ["Аппаар хэрхэн захиалах вэ?","1. «Захиалга» хэсэгт баримтынхаа зургийг хуудасны дарааллаар нь оруулна (зураг, PDF, Word). Нэр, утас, имэйлээ бичээд «Материалыг шалгах» дарна.\n2. Эх хэл, аль хэл рүү орчуулахаа сонгож, нэрийн латин бичлэгийг шалгаад «Үнийн санал авах» дарна.\n3. Үнийн саналыг харж, нөхцөлийг зөвшөөрөөд «Төлбөр төлөх» дарна.\n4. Төлбөр баталгаажмагц «Орчуулгаа эхлүүлэх» дарна.\n5. Орчуулгын ноорогтой танилцаад «Батлах» эсвэл «Засвар хийх» дарна.\n6. Баталгаат орчуулгаа PDF-ээр татаж авах, имэйлээр авах эсвэл цаасаар авна."],
+ ["Төлбөрөө хэрхэн төлөх вэ?","«Төлбөр төлөх» дарахад гарах дансанд гүйлгээний утга дээр орчуулгын дугаараа бичиж шилжүүлнэ. Утсан дээр банкны логог дарахад банкны апп, компьютер дээр интернэт банк нээгдэнэ. Шилжүүлсний дараа «Төлсөн» дарна. Бид төлбөрийг шалгаж баталгаажуулмагц танд мэдэгдэнэ."],
+ ["Захиалгаа дараа нь яаж олох вэ?","«Миний орчуулга» хэсэгт утасны дугаар эсвэл орчуулгын дугаараа (жишээ нь MO26001) бүтнээр нь оруулж «Хайх» дарна. Дуусаагүй захиалгууд тань мөн тэнд хадгалагдах тул тэндээс үргэлжлүүлж болно."],
+ ["Ноорог орчуулгад засвар хэрхэн хүсэх вэ?","Ноорог орчуулгын доор «Засвар хийх» дарж, текст дээр шууд засаад «Засвар илгээх» дарна. Орчуулгыг хүлээн авснаас хойш 14 хоногийн дотор «Миний орчуулга» хэсгээс «Алдаа мэдэгдэх» товчоор үнэгүй засуулж болно. Эх материалаас зөрсөн мэдээлэл оруулах засвар хийхгүй."],
+ ["Утсандаа апп болгон суулгаж болох уу?","Болно. app.monoffset.com хаягийг утасныхаа хөтчөөр нээнэ.\n• Android (Chrome): баруун дээд ⋮ цэс → «Нүүр дэлгэцэд нэмэх» эсвэл «Апп суулгах».\n• iPhone (Safari): доод талын хуваалцах товч → «Add to Home Screen».\nАпп нээгдэх бүртээ хамгийн сүүлийн хувилбараараа автоматаар шинэчлэгдэнэ."],
+ ["Найздаа санал болгоод урамшуулал авч болох уу?", () => `Болно. «Миний орчуулга» хэсгийн «Найздаа санал болгох» картаар бүртгүүлж, өөрийн холбоосыг авна. Таны холбоосоор орж захиалсан хүний төлбөрийн ${refPct(Date.now())}%-ийг урамшуулал болгон олгоно${refPct(Date.now()) !== (P.refPct2 != null ? Number(P.refPct2) : 5) ? ` (${P.refSwitch || "2027-01-01"}-ээс хойш ${P.refPct2 != null ? P.refPct2 : 5}%)` : ""}. Урамшуулал ${money(refMin())} хүрмэгц таны данс руу шилжүүлнэ. Урамшууллаа зөвхөн өөрийн хувийн холбоосоор харна, түүнийг бусдад бүү өгөөрэй.`],
  ["Цаасаар авч болох уу?","Болно. Та цаг товлож доорх байршлуудад цаасаар авах эсвэл хүргэлтийн төлбөрийг төлснөөр хүргэлтээр авах боломжтой.\n1. ЧД, Нисдэг машины хажууд Хуульчдын ордон 625 тоот (урьдчилан цаг товлоно).\n2. БЗД, Нарны зам дагуу LUX house 5, 3 давхар (урьдчилан цаг товлоно).\n3. БГД, 4-р хороолол, U&K тауэр (урьдчилан цаг товлоно)."]
 ];
 function textModal(title, items){
@@ -1861,22 +1874,24 @@ function makeQuote(o){
     const lines = [["Орчуулга баталгаажуулалт", std, unit, std*unit]]; if (errs) lines.push(["Алдаа засах", errs, per, errs*per]);
     return { lines, total:std*unit + errs*per, std, calc:{ kind:"certify", words:o.tWords, stdWords:Number(P.stdWords) || 600, pages:o.tpages, std, unit, errs, per } };
   }
-  let rate = priceFor(o.srcLang, o.tgtLang); if (!rate) return null;
+  // 2026-11-23: шинэ тариф — загварт орсон бол 1 нүүр P.tplPage, үгүй бол стандарт нүүр (≤ P.stdChars тэмдэгт): Монгол↔бусад P.pageMn, бусад хэл хооронд P.pageFF. НӨАТ ороогүй.
+  if (!o.srcLang || !o.tgtLang) return null;
   const imgs = Math.max(1, o.pages || 1);
   const n = o.docPages && o.docPages >= 1 && o.docPages < imgs ? o.docPages : imgs;
-  if (n > (Number(P.bulkPages) || 20)) rate = Math.max(1, rate - (Number(P.bulkOff) || 0));
-  const target = Math.round((Number(P.pageTarget) || 35000) * rate / 150 / 1000) * 1000;
-  let pagePrice, avg = null, raw = null;
-  if (o.words){ avg = Math.round(o.words / n); raw = (o.words / n) * rate; pagePrice = Math.abs(raw - target) <= target * .10 ? target : Math.round(raw / 10) * 10; }
-  else pagePrice = target;
-  const base = pagePrice * n, riskPct = 0;
-  const transl = Math.round(base * (1 + riskPct / 100) / 10) * 10;
-  const lines = [[`Орчуулга, ${o.srcLang} → ${o.tgtLang}`, n, pagePrice, transl]];
-  let total = lines.reduce((s,l) => s + l[3], 0), minAdd = 0;
-  const foreignPair = !!(o.srcLang && o.tgtLang && o.srcLang !== "Монгол" && o.tgtLang !== "Монгол");
-  const minP = foreignPair ? Math.max(Number(P.min) || 0, Number(P.minForeign) || 25000) : Number(P.min) || 0;   // 2026-11-22: гадаад↔гадаад доод үнэ
+  const foreign = o.srcLang !== "Монгол" && o.tgtLang !== "Монгол";
+  const stdC = Number(P.stdChars) || 1800;
+  const tpl = o.templateIndex >= 0 && TPL[o.templateIndex] ? TPL[o.templateIndex] : null;
+  let std = n, chars = Number(o.chars) || null;
+  if (!tpl && chars){
+    const pp = Array.isArray(o.charsPP) && o.charsPP.length === n && !(o.docPages && o.docPages < imgs) ? o.charsPP : null;
+    std = pp ? pp.reduce((x, c) => x + Math.max(1, Math.ceil((Number(c) || 0) / stdC)), 0) : Math.max(n, Math.ceil(chars / stdC));
+  }
+  const unit = tpl ? (Number(P.tplPage) || 15000) : foreign ? (Number(P.pageFF) || 40000) : (Number(P.pageMn) || 25000);
+  const lines = [[tpl ? `Орчуулга (загварт орсон), ${o.srcLang} → ${o.tgtLang}` : `Орчуулга, ${o.srcLang} → ${o.tgtLang}`, std, unit, std * unit]];
+  let total = std * unit, minAdd = 0;
+  const minP = Number(P.min) || 0;
   if (minP && total < minP){ minAdd = minP - total; lines.push(["Доод хураамж хүртэл нөхөх", 1, minAdd, minAdd]); total = minP; }
-  return { lines, total, calc:{ kind:"translate", foreign: !!(o.srcLang && o.tgtLang && o.srcLang !== "Монгол" && o.tgtLang !== "Монгол"), words:o.words || null, pages:n, imgs, avg, rate, raw: raw == null ? null : Math.round(raw), pagePrice, base, riskPct, risk: transl - base, minAdd } };
+  return { lines, total, calc:{ kind:"translate2", tpl: tpl ? (tpl.name || "") : "", foreign, chars, stdC, pages:n, imgs, std, unit, minAdd } };
 }
 const paidSum = o => (o.received != null ? Number(o.received) : 0);
 
@@ -1970,7 +1985,7 @@ function custStart(){
         for (let i = 0; i < cust.files.length; i++) await putPage(UID, i, cust.files[i]);
         if (cust.svc === "certify") for (let i = 0; i < cust.tfiles.length; i++) await putTPage(UID, i, cust.tfiles[i]);
       } catch(we){ console.error(we); if (!OWNER){ NOACCESS = "readonly"; renderCust(); return; } throw we; }
-      const base = { uid:UID, oid, service:cust.svc, kindHint:cust.kind || "", hasPassport:!!cust.passport, tpages: cust.svc === "certify" ? cust.tfiles.length : 0, name:name.value.trim(), phone:phone.value.trim(), email:email.value.trim(), pages:cust.files.length, status:"new", createdAt:Date.now(), updatedAt:Date.now(), claims:[], history:(ORDER && ORDER.history) || [] };
+      const base = { uid:UID, oid, service:cust.svc, kindHint:cust.kind || "", hasPassport:!!cust.passport, tpages: cust.svc === "certify" ? cust.tfiles.length : 0, name:name.value.trim(), phone:phone.value.trim(), email:email.value.trim(), pages:cust.files.length, status:"new", createdAt:Date.now(), updatedAt:Date.now(), claims:[], history:(ORDER && ORDER.history) || [], ...refKeep() };
       try { await orderSet(UID, base); } catch(we){ console.error(we); if (!OWNER){ NOACCESS = "readonly"; renderCust(); return; } throw we; }
       say("Материалыг шалгаж байна. Энэ хэдэн минут үргэлжилж магадгүй…");
       let an = null, anErr = "";
@@ -2006,6 +2021,11 @@ function custStart(){
       const imgN = cust.files.filter(f => f.img).length;
       const aiWords = an && Array.isArray(an.wordsPerPage) && an.wordsPerPage.length >= imgN ? an.wordsPerPage.slice(0, imgN).reduce((s, x) => s + (Number(x) || 0), 0) : null;
       const words = imgN && aiWords == null ? null : textWords + (aiWords || 0);
+      // 2026-11-23: тэмдэгт (хоосон зай орно) — стандарт нүүр тооцоход
+      const cc = t => String(t).replace(/\s+/g, " ").trim().length;
+      const aiCh = an && Array.isArray(an.charsPerPage) && an.charsPerPage.length >= imgN ? an.charsPerPage.slice(0, imgN).map(x => Math.max(0, Math.round(Number(x) || 0))) : (an && Array.isArray(an.wordsPerPage) && an.wordsPerPage.length >= imgN ? an.wordsPerPage.slice(0, imgN).map(x => Math.round((Number(x) || 0) * 7)) : null);
+      let ki = 0; const charsPP = imgN && !aiCh ? null : cust.files.map(f => f.text != null ? cc(f.text) : aiCh[ki++]);
+      const chars = charsPP ? charsPP.reduce((x, y) => x + y, 0) : null;
       const dp = an ? Math.round(Number(an.docPages) || 0) : 0;
       const docPages = imgN > 1 && dp >= 1 && dp < imgN ? cust.files.filter(f => f.text).length + dp : null;
       let stdPages = null; const tWords = [];
@@ -2028,7 +2048,7 @@ function custStart(){
         }
       }
       const tWordsSum = cust.svc === "certify" ? tWords.reduce((s, w) => s + w, 0) : null;
-      await orderUpd(UID, { status:"analyzed", analysis: an || { languages:[], manual:true }, analysisErr: an ? "" : String(anErr || "").slice(0, 160), words, docPages, stdPages, tWords:tWordsSum, certFail:null, fix:false });
+      await orderUpd(UID, { status:"analyzed", analysis: an || { languages:[], manual:true }, analysisErr: an ? "" : String(anErr || "").slice(0, 160), words, chars, charsPP, docPages, stdPages, tWords:tWordsSum, certFail:null, fix:false });
       cust.files = []; cust.tfiles = []; cust.msg = ""; cust.passport = null; cust.kind = "";
     } catch(e){
       console.error(e);
@@ -2127,7 +2147,7 @@ function custAnalysis(o){
     if (tgt === "Бусад"){ tgt = othIn.value.trim().replace(/\s*хэл(ээр|рүү)?$/i, ""); if (!tgt) return toast("Аль хэл рүү орчуулахаа бичнэ үү."); if (tgt === src) return toast("Эх хэлээс өөр хэл сонгоно уу."); }
     if (a.minor && !(box.querySelector("#aGuard") || {}).checked) return toast("Эцэг эх / асран хамгаалагч гэдгээ баталгаажуулна уу.");
     const names = (src === "Монгол" && tgt !== "Монгол") ? readNames() : [];
-    const q = makeQuote({ srcLang:src, tgtLang:tgt, pages:o.pages, docPages:o.docPages, words:o.words, service:o.service, stdPages:o.stdPages, tpages:o.tpages, tWords:o.tWords, fix, errors: fix ? (o.certFail.issues || []).length : 0 });
+    const q = makeQuote({ srcLang:src, tgtLang:tgt, pages:o.pages, docPages:o.docPages, words:o.words, chars:o.chars, charsPP:o.charsPP, templateIndex: typeof a.templateIndex === "number" ? a.templateIndex : -1, service:o.service, stdPages:o.stdPages, tpages:o.tpages, tWords:o.tWords, fix, errors: fix ? (o.certFail.issues || []).length : 0 });
     box.querySelectorAll("button").forEach(b => b.disabled = true);
     try {
       const num = o.num || (q ? await claimNum() : "");
@@ -2159,6 +2179,15 @@ function quoteRows(q){
     row("Баталгаажуулалт", money(c.std * c.unit), `${c.std} × ${money(c.unit)}`),
     c.errs ? row("Алдаа засах", money(c.errs * c.per), `${c.errs} алдаа × ${money(c.per)}`) : ""
   ].join("");
+  if (c.kind === "translate2") return [
+    c.tpl ? row("Загварт орсон баримт", esc(c.tpl), `1 нүүр = ${money(c.unit)}`) : row(c.foreign ? "Бусад хэл хооронд" : "Монгол ↔ бусад хэл", `${money(c.unit)} / стандарт нүүр`, `1 стандарт нүүр = ${c.stdC.toLocaleString("en-US")} тэмдэгтээс илүүгүй`),
+    c.imgs && c.imgs > c.pages ? row("Давхардсан хэсэг", "давхардуулж бодоогүй", `${c.imgs} зурагт ижил хэсэг давхардаж орсон тул ${c.pages} нүүрээр тооцов`) : "",
+    !c.tpl && c.chars ? row("Эх материалын тэмдэгт", `${c.chars.toLocaleString("en-US")} тэмдэгт`, `${c.pages} нүүр`) : row("Эх материал", `${c.pages} нүүр`),
+    row(c.tpl ? "Нүүр" : "Стандарт нүүр", `${c.std} нүүр`, !c.tpl && c.std > c.pages ? `Нүүр бүрийг тусад нь бодож, ${c.stdC.toLocaleString("en-US")} тэмдэгтээс давсныг нэмэлт нүүр гэж тооцов` : ""),
+    row("Орчуулга", money(c.std * c.unit), `${c.std} × ${money(c.unit)}`),
+    c.minAdd ? row("Доод хураамж хүртэл нөхөх", money(c.minAdd)) : "",
+    q.express ? row("Яаралтай", money(q.expressFee)) : ""
+  ].join("");
   return [
     c.foreign ? row("Гадаад хэл хооронд", "+50%", "Аль нэг хэл нь Монгол хэл биш тул нэг үгийн үнэ 50%-иар нэмэгдсэн") : "",
     c.imgs && c.imgs > c.pages ? row("Давхардсан хэсэг", "давхардуулж бодоогүй", `${c.imgs} зурагт ижил хэсэг давхардаж орсон тул ${c.pages} нүүрээр, давхардсан хэсгийг нэг л удаа тооцов`) : "",
@@ -2171,6 +2200,48 @@ function quoteRows(q){
     q.express ? row("Яаралтай", money(q.expressFee)) : ""
   ].join("");
 }
+/* ===== 2026-11-22: Санал болгох (урамшуулал) =====
+   checks/ref_<CODE>      {uid, kh, at}            — код бүртгэл (хүн бүр уншиж болно, утас/нэр агуулахгүй)
+   orders/<uid>.referrer  {code, name, phone, bank, kh} — санал болгогчийн мэдээлэл (зөвхөн админ)
+   private/referrals      {byCode:{CODE:{items, payouts, ...}}} — тооцоо (зөвхөн админ)
+   config/refbal_<kh>     — санал болгогчийн өөрийн үлдэгдэл; kh = sha(нууц түлхүүр), түлхүүргүй хүн замыг олж чадахгүй */
+const REF_RE = /^[A-Z2-9]{6}$/;
+const refBase = () => APP_URL.split("?")[0].split("#")[0];
+const refPct = ms => ms < Date.parse((P.refSwitch || "2027-01-01") + "T00:00:00+08:00") ? (P.refPct1 != null ? Number(P.refPct1) : 10) : (P.refPct2 != null ? Number(P.refPct2) : 5);
+const refMin = () => Number(P.refMin) || 10000;
+function refFromUrl(){
+  const q = location.search + "&" + location.hash.replace(/^#/, "");
+  const m = q.match(/[?&]ref=([A-Za-z2-9]{6})\b/); if (m) LS.set("kRef", m[1].toUpperCase());
+  const k = q.match(/[?&]rk=([0-9a-f]{32})\b/), c = q.match(/[?&]rc=([A-Za-z2-9]{6})\b/);
+  if (k && c){ LS.set("kRefKey", k[1]); LS.set("kRefCode", c[1].toUpperCase()); }
+  try { const pm = localStorage.getItem("mo_ref_param"); if (pm && REF_RE.test(pm.toUpperCase())){ LS.set("kRef", pm.toUpperCase()); localStorage.removeItem("mo_ref_param"); } } catch(e){}
+  try { const pk = localStorage.getItem("mo_rk_param"), pc = localStorage.getItem("mo_rc_param"); if (pk && pc){ LS.set("kRefKey", pk); LS.set("kRefCode", pc.toUpperCase()); localStorage.removeItem("mo_rk_param"); localStorage.removeItem("mo_rc_param"); } } catch(e){}
+}
+const refKeep = () => ({ ...(ORDER && ORDER.referrer ? { referrer:ORDER.referrer } : {}), ...((ORDER && ORDER.ref) || LS.get("kRef") ? { ref:(ORDER && ORDER.ref) || LS.get("kRef") } : {}) });
+const randHex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(x => x.toString(16).padStart(2, "0")).join("");
+const randCode = () => { const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; return [...crypto.getRandomValues(new Uint8Array(6))].map(x => A[x % A.length]).join(""); };
+async function refCredit(o){   // админ төлбөр баталгаажуулахад
+  try {
+    const code = String(o.ref || "").toUpperCase(); if (!REF_RE.test(code)) return;
+    const reg = await loadDoc("checks/ref_" + code); if (!reg || !reg.kh || reg.uid === o.uid) return;
+    const R = (await loadDoc("private/referrals")) || { byCode:{} }; R.byCode = R.byCode || {};
+    const r = R.byCode[code] || (R.byCode[code] = { code, kh:reg.kh, uid:reg.uid, items:[], payouts:[], at:Date.now() });
+    const ro = ORDERS.find(x => x.uid === reg.uid); if (ro && ro.referrer){ Object.assign(r, { name:ro.referrer.name || r.name || "", phone:ro.referrer.phone || r.phone || "", bank:ro.referrer.bank || r.bank || "" }); }
+    if (r.phone && digits(r.phone) && digits(r.phone) === digits(o.phone)) return;   // өөрөө өөрийгөө
+    if ((r.items || []).some(i => i.oid === o.oid)) return;
+    const amount = Number(o.received) || 0; if (!amount) return;
+    const pct = refPct(Date.now()), reward = Math.round(amount * pct / 100);
+    r.items.push({ oid:o.oid, num:o.num || "", cuid:o.uid, amount, pct, reward, at:Date.now() });
+    await saveDoc("private/referrals", R); await refPublish(r);
+  } catch(e){ console.error(e); }
+}
+async function refPublish(r){
+  const earned = (r.items || []).reduce((a, i) => a + (i.reward || 0), 0), paid = (r.payouts || []).reduce((a, x) => a + (x.amount || 0), 0);
+  const people = new Set((r.items || []).map(i => i.cuid)).size;
+  await saveDoc("config/refbal_" + r.kh, { code:r.code, earned, paid, due:earned - paid, people, orders:(r.items || []).length,
+    items:(r.items || []).slice(-30).map(i => ({ at:i.at, pct:i.pct, reward:i.reward })), payouts:(r.payouts || []).slice(-20).map(x => ({ at:x.at, amount:x.amount })), updatedAt:Date.now() });
+}
+
 const AGREE = "Орчуулгад эх материалаас зөрсөн мэдээлэл бүхий засвар хийгдэх боломжгүй бөгөөд ийм зөрчилтэй холбоотойгоор төлсөн төлбөр буцаагдахгүй гэдгийг уншиж, зөвшөөрч байна.";
 function custQuote(o){
   if (!o.quote) return h(`<div class="card"><h2><b>2</b>Үнийн санал</h2><div class="note warn"><p>${esc(o.srcLang)} → ${esc(o.tgtLang)} орчуулгын үнийг утсаар тохирно.</p><p><a href="tel:${PHONE}" style="color:inherit;font-weight:700;font-size:18px">📞 ${PHONE}</a></p></div><button class="btn ghost wide" id="qBack">Буцах</button></div>`);
@@ -2178,6 +2249,7 @@ function custQuote(o){
     <p class="hint">Орчуулгын дугаар ${esc(o.num || o.oid)}, ${esc(o.srcLang)} → ${esc(o.tgtLang)}, ${o.service === "certify" ? `баталгаажуулалт${o.fix ? " ба алдаа засах" : ""}, ${o.quote.std || o.stdPages || 1} стандарт нүүр` : (o.docPages && o.docPages < o.pages ? `${o.docPages} нүүр (${o.pages} зураг, давхардсан хэсгийг хассан)` : `${o.pages} нүүр`)}</p>
     <table class="q"><tr class="tot"><td>Нийт дүн</td><td class="n">${money(o.quote.total)}<br><small style="font-weight:400;font-size:13px;color:var(--muted)">(НӨАТ ороогүй дүн)</small></td></tr></table>
     <div id="qExp"></div>
+    ${o.service !== "certify" || true ? `<label class="f" style="margin-top:10px">Санал болгосон хүний код (заавал биш)<input id="qRef" autocomplete="off" maxlength="6" style="text-transform:uppercase" value="${esc(o.ref || LS.get("kRef") || "")}" ${o.ref ? "readonly" : ""}></label>` : ""}
     <label class="check" style="margin-top:14px"><input type="checkbox" id="qAgree"><span>${AGREE}</span></label>
     <p class="hint" style="margin:14px 0 4px;font-weight:700;color:var(--ink)">Харилцагчийн мэдээлэл:</p>
     <label class="f">Нэр:<input id="qName" autocomplete="name" value="${esc(o.name || LS.get("kName") || "")}"></label>
@@ -2206,7 +2278,16 @@ function custQuote(o){
     const rv = box.querySelector("#qR"), review = !!(rv && rv.checked);
     if (review && !q.review) q = { ...q, review:true, reviewFee:rvFee, total:q.total + rvFee, lines:[...q.lines, ["Мэргэжлийн хяналт", rvPg, Number(P.reviewFee) || 0, rvFee]] };
     if (!review && q.review) q = { ...q, review:false, total:q.total - (q.reviewFee || 0), lines:q.lines.filter(l => l[0] !== "Мэргэжлийн хяналт") };
-    await orderUpd(UID, { quote:q, consent:{ at:Date.now(), terms:TERMS_VER, adult:true } });
+    // санал болгосон код шалгах
+    let ref = o.ref || "";
+    const rin = box.querySelector("#qRef"), rc = rin ? rin.value.trim().toUpperCase() : "";
+    if (!ref && rc){
+      if (!REF_RE.test(rc)){ unlockBtn(pay); return toast("Санал болгосон хүний код 6 тэмдэгт байна. Мэдэхгүй бол хоосон үлдээнэ үү."); }
+      const reg = await loadDoc("checks/ref_" + rc);
+      if (!reg){ unlockBtn(pay); return toast("Ийм санал болгох код олдсонгүй. Кодоо шалгах эсвэл хоосон үлдээнэ үү."); }
+      if (reg.uid !== UID){ ref = rc; LS.set("kRef", rc); }
+    }
+    await orderUpd(UID, { quote:q, consent:{ at:Date.now(), terms:TERMS_VER, adult:true }, ...(ref ? { ref } : {}) });
     payModal({ ...o, quote:q }, q.total, "Орчуулгын төлбөр");
   };
   return box;
@@ -2572,7 +2653,7 @@ function custDone(o){
   box.querySelector("#xNew").before(complaintBlock(o));
   box.querySelector("#xNew").onclick = async () => {
     const hist = [...(o.history||[]), { oid:o.oid, num:(o.translation||{}).num, at:o.doneAt }];
-    await orderSet(UID, { uid:UID, status:"new", history:hist, registered:true, createdAt:Date.now(), updatedAt:Date.now() });
+    await orderSet(UID, { uid:UID, status:"new", history:hist, registered:true, createdAt:Date.now(), updatedAt:Date.now(), ...refKeep() });
   };
   return box;
 }
@@ -2603,13 +2684,56 @@ function renderDrafts(){
   box.appendChild(c);
 }
 
+function renderRef(){
+  const box = $("#myRef"); if (!box) return; box.innerHTML = "";
+  const key = LS.get("kRefKey"), code = LS.get("kRefCode");
+  const c = h(`<div class="card"><h2>🤝 Найздаа санал болгох</h2><div id="rfBody"></div></div>`); box.appendChild(c);
+  const body = c.querySelector("#rfBody");
+  if (!key || !code){
+    body.appendChild(h(`<div><p>Аппыг найз, танилдаа санал болгоорой. Таны холбоосоор орж захиалга өгсөн хүн бүрийн төлбөрийн <b>${refPct(Date.now())}%</b>-ийг танд урамшуулал болгон олгоно${refPct(Date.now()) !== (P.refPct2 != null ? Number(P.refPct2) : 5) ? ` (${esc(P.refSwitch || "2027-01-01")}-ээс хойш ${P.refPct2 != null ? P.refPct2 : 5}%)` : ""}. Тэдний бүх захиалгад үүрд хамаарна. Урамшуулал ${money(refMin())} хүрмэгц таны данс руу шилжүүлнэ.</p>
+      <label class="f">Нэр<input id="rfName" autocomplete="name" value="${esc(LS.get("kName") || "")}"></label>
+      <label class="f">Утас *<input id="rfPhone" inputmode="tel" autocomplete="tel" value="${esc(LS.get("kPhone") || "")}"></label>
+      <label class="f">Урамшуулал авах данс (банк, дансны дугаар, эзэмшигч)<input id="rfBank" autocomplete="off" placeholder="Хаан банк 5000123456, Бат"></label>
+      <button class="btn primary wide" id="rfGo">Бүртгүүлж холбоос авах</button></div>`));
+    body.querySelector("#rfGo").onclick = async () => {
+      const phone = digits(body.querySelector("#rfPhone").value), name = body.querySelector("#rfName").value.trim(), bank = body.querySelector("#rfBank").value.trim();
+      if (phone.length < 8){ unlockBtn(body.querySelector("#rfGo")); return toast("Утасны дугаараа оруулна уу."); }
+      let cd = ""; for (let t = 0; t < 8 && !cd; t++){ const x = randCode(); if (!(await loadDoc("checks/ref_" + x))) cd = x; }
+      if (!cd){ unlockBtn(body.querySelector("#rfGo")); return toast("Код үүсгэж чадсангүй, дахин оролдоно уу."); }
+      const k = randHex(16), kh = (await sha("mo-ref:" + k)).slice(0, 40);
+      try {
+        if (DB) await DB.doc("checks/ref_" + cd).set({ uid:UID, kh, at:Date.now() }); else LS.set("checks_ref_" + cd, { uid:UID, kh, at:Date.now() });
+        const referrer = { code:cd, name, phone, bank, kh, at:Date.now() };
+        if (ORDER) await orderUpd(UID, { referrer }); else await orderSet(UID, { uid:UID, status:"new", createdAt:Date.now(), updatedAt:Date.now(), referrer });
+      } catch(e){ unlockBtn(body.querySelector("#rfGo")); return toast("Бүртгэж чадсангүй. Дахин оролдоно уу."); }
+      LS.set("kRefKey", k); LS.set("kRefCode", cd); toast("Бүртгэгдлээ.");
+      renderRef();
+    };
+    return;
+  }
+  const link = refBase() + "?ref=" + code, priv = refBase() + "?rk=" + key + "&rc=" + code;
+  body.appendChild(h(`<div><p>Таны код: <b style="font-size:20px;letter-spacing:.08em">${esc(code)}</b></p>
+    <p class="hint" style="margin:0 0 4px">Энэ холбоосыг найздаа явуулаарай:</p>
+    <div class="row" style="gap:6px;align-items:center"><input readonly value="${esc(link)}" style="flex:1"><button class="btn" id="rfCopy" data-nolock>Хуулах</button>${navigator.share ? `<button class="btn primary" id="rfShare" data-nolock>Хуваалцах</button>` : ""}</div>
+    <div id="rfBal" style="margin-top:12px"><p class="hint">Урамшууллын мэдээллийг ачаалж байна…</p></div>
+    <details class="help" style="margin-top:10px"><summary>Өөр төхөөрөмж дээрээс урамшууллаа харах</summary><p class="hint">Энэ бол таны <b>хувийн</b> холбоос. Үүгээр л таны урамшууллыг харах боломжтой тул бусдад бүү өгөөрэй. Хадгалж аваарай:</p><div class="row" style="gap:6px"><input readonly value="${esc(priv)}" style="flex:1"><button class="btn" id="rfCopy2" data-nolock>Хуулах</button></div></details></div>`));
+  const cp = async v => { try { await navigator.clipboard.writeText(v); toast("Хууллаа."); } catch(e){ toast(v); } };
+  body.querySelector("#rfCopy").onclick = () => cp(link); body.querySelector("#rfCopy2").onclick = () => cp(priv);
+  const sh = body.querySelector("#rfShare"); if (sh) sh.onclick = () => navigator.share({ title:"Мон-Оффсет баталгаат орчуулга", text:"Баталгаат орчуулгаа онлайнаар захиалаарай:", url:link }).catch(() => {});
+  (async () => {
+    const kh = (await sha("mo-ref:" + key)).slice(0, 40), d = await loadDoc("config/refbal_" + kh), bal = body.querySelector("#rfBal");
+    if (!d){ bal.innerHTML = `<div class="note info"><p>Одоогоор урамшуулал бодогдоогүй байна. Таны холбоосоор орсон хүн захиалгаа төлмөгц энд харагдана.</p></div>`; return; }
+    bal.innerHTML = `<div class="note ok"><p>Элсүүлсэн хүн: <b>${d.people || 0}</b>, төлөгдсөн захиалга: <b>${d.orders || 0}</b></p><p>Нийт урамшуулал: <b>${money(d.earned || 0)}</b>, олгосон: ${money(d.paid || 0)}</p><p><b>Олгох үлдэгдэл: ${money(d.due || 0)}</b>${(d.due || 0) >= refMin() ? " — удахгүй таны данс руу шилжүүлнэ." : ` (${money(refMin())} хүрмэгц шилжүүлнэ)`}</p></div>`;
+  })();
+}
+
 /* ---------- Customer: My translations ---------- */
 const my = { phone:"", num:"", list:null, view:null };
-function setCTab(t){ document.querySelectorAll("#cTabs button").forEach(b => b.classList.toggle("on", b.dataset.c === t)); $("#cOrd").hidden = t !== "ord"; $("#cMy").hidden = t !== "my"; $("#cFaq").hidden = t !== "faq"; if (t === "faq") renderFaq(); if (t === "my") renderDrafts(); if (t === "my" && !my.phone){ $("#myPhone").value = LS.get("kPhone") || ""; } }
+function setCTab(t){ document.querySelectorAll("#cTabs button").forEach(b => b.classList.toggle("on", b.dataset.c === t)); $("#cOrd").hidden = t !== "ord"; $("#cMy").hidden = t !== "my"; $("#cFaq").hidden = t !== "faq"; if (t === "faq") renderFaq(); if (t === "my"){ renderDrafts(); renderRef(); } if (t === "my" && !my.phone){ $("#myPhone").value = LS.get("kPhone") || ""; } }
 document.querySelectorAll("#cTabs button").forEach(b => b.onclick = () => setCTab(b.dataset.c));
 function renderFaq(){
   const b = $("#faqList"); if (b.childElementCount) return;
-  FAQ.forEach(q => { const d = el("details"); d.style.cssText = "border-bottom:1px solid var(--line);padding:10px 0"; const s = el("summary", null, q[0]); s.style.cssText = "cursor:pointer;font-weight:700"; const p = el("p", null, q[1]); p.style.cssText = "margin:8px 0 0;color:var(--muted);white-space:pre-line"; d.append(s, p); b.appendChild(d); });
+  FAQ.forEach(q => { const d = el("details"); d.style.cssText = "border-bottom:1px solid var(--line);padding:10px 0"; const s = el("summary", null, q[0]); s.style.cssText = "cursor:pointer;font-weight:700"; const p = el("p", null, typeof q[1] === "function" ? q[1]() : q[1]); p.style.cssText = "margin:8px 0 0;color:var(--muted);white-space:pre-line"; d.append(s, p); b.appendChild(d); });
   $("#faqDocs").innerHTML = docLinks + `<br>📞 <a href="tel:${PHONE}" style="color:var(--seal)">${PHONE}</a>, ${esc(CO.email)}`;
 }
 function myStatus(t, err){ const s = $("#myStatus"); s.textContent = t; s.classList.toggle("err", !!err); }
@@ -2780,6 +2904,7 @@ function orderCard(o){
     if (ok && !document.querySelector("#modal:not([hidden])")) toast("✓ " + t);
   }; acts.appendChild(b); return b; };
   if (false && o.analysis && o.analysis.bilingual && o.analysis.consistent === false) body.appendChild(h(`<div class="note warn" style="font-size:14px"><p>Хэл хоорондын зөрүү: ${esc((o.analysis.differences||[]).join("; "))}</p></div>`));
+  if (o.ref) body.appendChild(h(`<p class="hint" style="margin:2px 0 6px">🤝 Санал болгосон код: <b>${esc(o.ref)}</b></p>`));
   if (o.quote && o.quote.total){   // 2026-11-22: үнийн тооцооны дэлгэрэнгүйг зөвхөн админд
     body.appendChild(h(`<details class="help" style="margin:4px 0 8px"><summary>Үнийн тооцоо</summary><table class="q">${quoteRows(o.quote)}<tr class="tot"><td>Нийт дүн (НӨАТ ороогүй)</td><td class="n">${money(o.quote.total)}</td></tr></table></details>`));
   }
@@ -3431,21 +3556,18 @@ $("#regCsv").onclick = () => {
 /* ---------- Settings ---------- */
 function fillSettings(){
   $("#sPrefix").value = C.prefix; $("#sLast").value = C.last; $("#sTrans").value = C.translator;
-  $("#pCert").value = P.cert || ""; $("#pMin").value = P.min || ""; $("#pMinF").value = P.minForeign || 25000; $("#pCourier").value = P.courier; $("#pFree").value = P.freeOver; $("#pReopen").value = P.reopen || "";
-  $("#pTarget").value = P.pageTarget; $("#pStd").value = P.stdWords || 600; $("#sAuto").checked = C.autoOn !== false; $("#sLayout").checked = C.layoutFrame === true; $("#pExpFee").value = P.expressFee || ""; $("#pRevFee").value = P.reviewFee || ""; $("#pExpH").value = P.expressHours || 1; $("#pKeep").value = P.keepSrcDays || 30; $("#pFix").value = P.fixPerError || 2500; $("#pBulkP").value = P.bulkPages; $("#pBulkO").value = P.bulkOff;
+  $("#pCert").value = P.cert || ""; $("#pMin").value = P.min || ""; $("#pRef1").value = P.refPct1 != null ? P.refPct1 : 10; $("#pRef2").value = P.refPct2 != null ? P.refPct2 : 5; $("#pRefD").value = P.refSwitch || "2027-01-01"; $("#pRefMin").value = P.refMin || 10000; $("#pCourier").value = P.courier; $("#pFree").value = P.freeOver; $("#pReopen").value = P.reopen || "";
+  $("#pTplP").value = P.tplPage || 15000; $("#pMnP").value = P.pageMn || 25000; $("#pFFP").value = P.pageFF || 40000; $("#pStdC").value = P.stdChars || 1800; $("#pStd").value = P.stdWords || 600; $("#sAuto").checked = C.autoOn !== false; $("#sLayout").checked = C.layoutFrame === true; $("#pExpFee").value = P.expressFee || ""; $("#pRevFee").value = P.reviewFee || ""; $("#pExpH").value = P.expressHours || 1; $("#pKeep").value = P.keepSrcDays || 30; $("#pFix").value = P.fixPerError || 2500;
   $("#sNotify").value = NOTIFY || "";
   $("#bBank").value = BANK.bank; $("#bHolder").value = BANK.holder; $("#bAcc").value = BANK.acc; $("#bPickup").value = BANK.pickup;
-  const g = $("#priceGrid"); g.innerHTML = `<span class="h">Хэл</span><span class="h">→ Монгол, ₮/үг</span><span class="h">Монгол →, ₮/үг</span>`;
-  LANGS.forEach(l => { g.appendChild(el("span", null, l)); ["to","from"].forEach(k => { const i = el("input"); i.inputMode = "numeric"; i.value = P[k][l] || ""; i.dataset.k = k; i.dataset.l = l; i.placeholder = "—"; g.appendChild(i); }); });
   $("#stampImg").src = B.stamp || STAMP_DEFAULT; $("#logoImg").src = B.logo || LOGO_DEFAULT; if ($("#embImg")) $("#embImg").src = B.emblem || EMBLEM_DEFAULT;
 }
 const num = v => Number(String(v).replace(/[^\d]/g,"")) || 0;
 $("#sLayout").onchange = async () => { C.layoutFrame = $("#sLayout").checked; delete C.layoutMode; try { await saveDoc("config/main", C); toast(C.layoutFrame ? "Хүрээ, лого хуулах горим асаалаа." : "Цэвэр бичвэр хэлбэрээр орчуулна."); } catch(e){ toast("Хадгалж чадсангүй."); } };
 $("#sSave").onclick = async () => {
   C.prefix = $("#sPrefix").value.trim() || "MO26"; C.last = num($("#sLast").value); C.translator = $("#sTrans").value.trim();
-  P.cert = num($("#pCert").value); P.min = num($("#pMin").value); P.minForeign = num($("#pMinF").value) || 25000; P.courier = num($("#pCourier").value); P.freeOver = num($("#pFree").value); P.reopen = num($("#pReopen").value);
-  P.pageTarget = num($("#pTarget").value) || 35000; P.stdWords = num($("#pStd").value) || 600; C.autoOn = $("#sAuto").checked; C.layoutFrame = $("#sLayout").checked; delete C.layoutMode; P.expressFee = num($("#pExpFee").value); P.reviewFee = num($("#pRevFee").value); P.expressHours = num($("#pExpH").value) || 1; P.keepSrcDays = num($("#pKeep").value) || 30; P.fixPerError = num($("#pFix").value) || 2500; P.risk = 0; P.bulkPages = num($("#pBulkP").value) || 20; P.bulkOff = num($("#pBulkO").value);
-  document.querySelectorAll("#priceGrid input").forEach(i => { P[i.dataset.k][i.dataset.l] = num(i.value); });
+  P.cert = num($("#pCert").value); P.min = num($("#pMin").value); P.refPct1 = num($("#pRef1").value); P.refPct2 = num($("#pRef2").value); P.refSwitch = $("#pRefD").value || "2027-01-01"; P.refMin = num($("#pRefMin").value) || 10000; P.courier = num($("#pCourier").value); P.freeOver = num($("#pFree").value); P.reopen = num($("#pReopen").value);
+  P.tplPage = num($("#pTplP").value) || 15000; P.pageMn = num($("#pMnP").value) || 25000; P.pageFF = num($("#pFFP").value) || 40000; P.stdChars = num($("#pStdC").value) || 1800; P.stdWords = num($("#pStd").value) || 600; C.autoOn = $("#sAuto").checked; C.layoutFrame = $("#sLayout").checked; delete C.layoutMode; P.expressFee = num($("#pExpFee").value); P.reviewFee = num($("#pRevFee").value); P.expressHours = num($("#pExpH").value) || 1; P.keepSrcDays = num($("#pKeep").value) || 30; P.fixPerError = num($("#pFix").value) || 2500; P.risk = 0;
   Object.assign(BANK, { bank:$("#bBank").value.trim(), holder:$("#bHolder").value.trim(), acc:$("#bAcc").value.trim(), pickup:$("#bPickup").value.trim() });
   NOTIFY = $("#sNotify").value.trim(); if (NOTIFY && !/^\S+@\S+\.\S+$/.test(NOTIFY)){ toast("Мэдэгдлийн имэйл хаяг буруу байна."); return; }
   await saveDoc("config/main", { ...C }); await saveDoc("config/public", { prices:P, bank:BANK, notify:NOTIFY });
@@ -3492,11 +3614,40 @@ function renderTpl(){
 $("#tplAdd").onclick = () => { TPL.push({ name:"", text:"", imgs:[] }); renderTpl(); };
 
 /* ---------- Tabs, toast ---------- */
+async function renderRefAdmin(){
+  const box = $("#refList"); box.innerHTML = `<p class="hint">Ачаалж байна…</p>`;
+  const R = (await loadDoc("private/referrals")) || { byCode:{} };
+  // бүртгүүлсэн боловч орлогогүй санал болгогчид (захиалгын мэдээллээс)
+  ORDERS.forEach(o => { const rr = o.referrer; if (rr && rr.code && !(R.byCode || {})[rr.code]) (R.byCode = R.byCode || {})[rr.code] = { code:rr.code, kh:rr.kh, uid:o.uid, name:rr.name, phone:rr.phone, bank:rr.bank, items:[], payouts:[] }; else if (rr && rr.code){ const x = R.byCode[rr.code]; x.name = rr.name || x.name; x.phone = rr.phone || x.phone; x.bank = rr.bank || x.bank; } });
+  const list = Object.values(R.byCode || {});
+  box.innerHTML = list.length ? "" : `<div class="note info"><p>Одоогоор санал болгогч бүртгүүлээгүй байна.</p></div>`;
+  list.map(r => ({ r, earned:(r.items || []).reduce((a, i) => a + (i.reward || 0), 0), paid:(r.payouts || []).reduce((a, x) => a + (x.amount || 0), 0) }))
+    .sort((a, b) => (b.earned - b.paid) - (a.earned - a.paid)).forEach(({ r, earned, paid }) => {
+      const due = earned - paid, people = new Set((r.items || []).map(i => i.cuid)).size;
+      const row = h(`<div class="ord" style="padding:10px 12px;margin:8px 0${due >= refMin() ? ";border-color:var(--ok)" : ""}"><p style="margin:0"><b>${esc(r.code)}</b> · ${esc(r.name || "-")} · 📞 ${esc(r.phone || "-")}</p>
+        <p class="hint" style="margin:2px 0">Данс: ${esc(r.bank || "-")}</p>
+        <p style="margin:4px 0">Элсүүлсэн: <b>${people}</b> хүн, ${(r.items || []).length} төлбөр · Нийт: ${money(earned)} · Олгосон: ${money(paid)} · <b style="color:${due >= refMin() ? "var(--ok)" : "inherit"}">Үлдэгдэл: ${money(due)}</b></p>
+        <details><summary class="hint">Дэлгэрэнгүй</summary>${(r.items || []).map(i => `<p class="hint" style="margin:2px 0">${fmtDate(i.at)} · ${esc(i.num || i.oid)} · ${money(i.amount)} × ${i.pct}% = ${money(i.reward)}</p>`).join("") || "<p class='hint'>Төлбөр алга</p>"}${(r.payouts || []).map(x => `<p class="hint" style="margin:2px 0">✓ ${fmtDate(x.at)} олгосон ${money(x.amount)}</p>`).join("")}</details></div>`);
+      if (due > 0 && r.kh){
+        const b = el("button", "btn okb", `Олгосон (${money(due)})`); b.style.marginTop = "6px";
+        b.onclick = async () => {
+          const v = Number(String(prompt("Шилжүүлсэн дүн (₮):", String(due)) || "").replace(/[^\d]/g, "")); if (!v){ unlockBtn(b); return; }
+          const R2 = (await loadDoc("private/referrals")) || { byCode:{} }; R2.byCode = R2.byCode || {};
+          const x = R2.byCode[r.code] || (R2.byCode[r.code] = { ...r, items:r.items || [], payouts:[] });
+          Object.assign(x, { name:r.name, phone:r.phone, bank:r.bank, kh:r.kh }); (x.payouts = x.payouts || []).push({ amount:v, at:Date.now() });
+          await saveDoc("private/referrals", R2); await refPublish(x); toast("Олголтыг бүртгэлээ."); renderRefAdmin();
+        };
+        row.appendChild(b);
+      }
+      box.appendChild(row);
+    });
+}
 function showTab(name){
   document.querySelectorAll("#adminNav button").forEach(x => x.classList.toggle("on", x.dataset.tab === name));
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + name));
   if (name === "new") schedulePreview();
   if (name === "audit") renderAudit();
+  if (name === "ref") renderRefAdmin();
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("#adminNav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -3517,6 +3668,7 @@ document.addEventListener("click", e => {
 }, true);
 const unlockBtn = b => { if (!b) return; b.classList.remove("busy"); if (b.dataset.lk === "1"){ delete b.dataset.lk; b.disabled = false; } };
 (async () => {
+  try { refFromUrl(); } catch(e){}
   if (/[?&]embed\b/.test(location.search) || /embed/.test(location.hash)) document.documentElement.classList.add("embed");
   $("#hAddr").textContent = "УБ, ЧД, Хуульчдын ордон 625 тоот";
   await buildSeal();
