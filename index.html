@@ -419,6 +419,7 @@ nav button.on{background:#5a5446;color:#fff}
   #printRoot .sheet{page-break-after:always;break-after:page}
 }
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
+details *{box-sizing:border-box}.refbox>summary::-webkit-details-marker{display:none}.refbox>summary{list-style:none}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#423d33">
@@ -459,6 +460,7 @@ nav button.on{background:#5a5446;color:#fff}
     </div>
     <div id="cFaq" hidden><div class="card"><h2>Түгээмэл асуулт</h2><div id="faqList"></div><p id="faqDocs" style="margin-top:14px"></p></div></div>
     <div id="cMy" hidden>
+      <div id="myDrafts"></div>
       <div class="card">
         <h2>Миний орчуулга</h2>
         <p class="hint">Утасны дугаараар хайвал тухайн дугаарт бүртгэлтэй бүх орчуулга, орчуулгын дугаараар хайвал тухайн орчуулга гарна.</p>
@@ -468,7 +470,6 @@ nav button.on{background:#5a5446;color:#fff}
         <p id="myStatus" class="status" aria-live="polite"></p>
       </div>
       <div id="myRef"></div>
-      <div id="myDrafts"></div>
       <div id="myList"></div>
       <div id="myView"></div>
     </div>
@@ -2249,7 +2250,7 @@ function custQuote(o){
     <p class="hint">Орчуулгын дугаар ${esc(o.num || o.oid)}, ${esc(o.srcLang)} → ${esc(o.tgtLang)}, ${o.service === "certify" ? `баталгаажуулалт${o.fix ? " ба алдаа засах" : ""}, ${o.quote.std || o.stdPages || 1} стандарт нүүр` : (o.docPages && o.docPages < o.pages ? `${o.docPages} нүүр (${o.pages} зураг, давхардсан хэсгийг хассан)` : `${o.pages} нүүр`)}</p>
     <table class="q"><tr class="tot"><td>Нийт дүн</td><td class="n">${money(o.quote.total)}<br><small style="font-weight:400;font-size:13px;color:var(--muted)">(НӨАТ ороогүй дүн)</small></td></tr></table>
     <div id="qExp"></div>
-    ${o.service !== "certify" || true ? `<label class="f" style="margin-top:10px">Санал болгосон хүний код (заавал биш)<input id="qRef" autocomplete="off" maxlength="6" style="text-transform:uppercase" value="${esc(o.ref || LS.get("kRef") || "")}" ${o.ref ? "readonly" : ""}></label>` : ""}
+    ${o.service !== "certify" || true ? `<details class="help" style="margin-top:10px" ${o.ref || LS.get("kRef") ? "open" : ""}><summary>Санал болгосон хүний код (заавал биш)</summary><input id="qRef" autocomplete="off" maxlength="6" placeholder="Жишээ нь: 9SATNV" style="text-transform:uppercase;margin-top:6px;width:100%" value="${esc(o.ref || LS.get("kRef") || "")}" ${o.ref ? "readonly" : ""}></details>` : ""}
     <label class="check" style="margin-top:14px"><input type="checkbox" id="qAgree"><span>${AGREE}</span></label>
     <p class="hint" style="margin:14px 0 4px;font-weight:700;color:var(--ink)">Харилцагчийн мэдээлэл:</p>
     <label class="f">Нэр:<input id="qName" autocomplete="name" value="${esc(o.name || LS.get("kName") || "")}"></label>
@@ -2452,10 +2453,15 @@ function complaintBlock(o){
   const b = el("button", "btn ghost wide", "Орчуулга таны сэтгэлд хүрээгүй бол энд дарна уу"); b.style.marginTop = "12px";
   b.onclick = () => {
     const m = $("#modal"), x = $("#modalBox");
-    x.innerHTML = `<h3>Сэтгэл хангалуун бус байна уу?</h3><p class="hint">Таны эх материал болон орчуулгыг манай орчуулагч дахин шалгаж, тантай холбогдоно.</p><label class="f">Юу нь сэтгэлд хүрээгүй вэ? (заавал биш)<textarea id="cpNote" rows="4"></textarea></label><div class="row"><button id="cpSend" class="btn primary">Илгээх</button><button id="cpClose" class="btn">Болих</button></div>`;
+    x.innerHTML = `<h3>Сэтгэл хангалуун бус байна уу?</h3><p class="hint">Таны эх материал болон орчуулгыг манай орчуулагч дахин шалгаж, тантай холбогдоно.</p><label class="f">Юу нь сэтгэлд хүрээгүй вэ?<textarea id="cpNote" rows="4" placeholder="Жишээ нь: нэрийн бичлэг буруу"></textarea></label><p class="hint" id="cpHint" style="margin:-4px 0 10px">Шалтгаанаа бичнэ үү (3-аас дээш үсэг).</p><div class="row"><button id="cpSend" class="btn primary" disabled data-nolock>Илгээх</button><button id="cpClose" class="btn">Болих</button></div>`;
     m.hidden = false;
     x.querySelector("#cpClose").onclick = () => m.hidden = true;
+    // 2026-11-23: 3-аас дээш үсэг бичээгүй бол «Илгээх» идэвхгүй
+    const cpOk = () => (x.querySelector("#cpNote").value.match(/\p{L}/gu) || []).length > 3;
+    x.querySelector("#cpNote").oninput = () => { const ok = cpOk(); x.querySelector("#cpSend").disabled = !ok; x.querySelector("#cpHint").hidden = ok; };
     x.querySelector("#cpSend").onclick = async () => {
+      if (!cpOk()) return;
+      x.querySelector("#cpSend").disabled = true;
       const note = x.querySelector("#cpNote").value.trim(); m.hidden = true;
       await orderUpd(UID, { complaint:{ note, at:Date.now(), status:"new" } });
       toast("Хүлээн авлаа. Бид удахгүй холбогдоно.");
@@ -2482,6 +2488,9 @@ function custReview(o){
     nc.forEach(x => nb.appendChild(el("p", null, `• ${x.page > 1 || nc.some(y => y.page > 1) ? x.page + "-р хуудас, " : ""}${x.label ? x.label + ": " : ""}${x.value}`)));
     nb.appendChild(h(`<label class="check"><input type="checkbox" id="rNumOk"><span>Эдгээр тоог эх материалтай тулгаж шалгасан. Буруу бол «Засвар хийх»-ээр засна.</span></label>`));
     box.querySelector(".shots").after(nb);
+    const okB = box.querySelector("#rOk"), cb = nb.querySelector("#rNumOk");   // 2026-11-23: чагтлаагүй бол «Батлах» идэвхгүй
+    okB.disabled = true; okB.title = "Тоонуудыг шалгаснаа эхлээд чагтална уу";
+    cb.onchange = () => { okB.disabled = !cb.checked; okB.title = cb.checked ? "" : "Тоонуудыг шалгаснаа эхлээд чагтална уу"; };
   }
   box.appendChild(complaintBlock(o));
   box.querySelector("#rOk").onclick = () => {
@@ -2687,10 +2696,12 @@ function renderDrafts(){
 function renderRef(){
   const box = $("#myRef"); if (!box) return; box.innerHTML = "";
   const key = LS.get("kRefKey"), code = LS.get("kRefCode");
-  const c = h(`<div class="card"><h2>🤝 Найздаа санал болгох</h2><div id="rfBody"></div></div>`); box.appendChild(c);
+  const c = h(`<div class="card"><details class="refbox"${box.dataset.open ? " open" : ""}><summary style="cursor:pointer;list-style:none"><h2 style="margin:0">🤝 Найздаа санал болгох <span style="font-size:14px;font-weight:400;color:var(--muted)">▾</span></h2></summary><div id="rfBody" style="margin-top:10px"></div></details></div>`); box.appendChild(c);
+  c.querySelector("details").ontoggle = e => { if (e.target.open) box.dataset.open = "1"; else delete box.dataset.open; };
   const body = c.querySelector("#rfBody");
   if (!key || !code){
-    body.appendChild(h(`<div><p>Аппыг найз, танилдаа санал болгоорой. Таны холбоосоор орж захиалга өгсөн хүн бүрийн төлбөрийн <b>${refPct(Date.now())}%</b>-ийг танд урамшуулал болгон олгоно${refPct(Date.now()) !== (P.refPct2 != null ? Number(P.refPct2) : 5) ? ` (${esc(P.refSwitch || "2027-01-01")}-ээс хойш ${P.refPct2 != null ? P.refPct2 : 5}%)` : ""}. Тэдний бүх захиалгад үүрд хамаарна. Урамшуулал ${money(refMin())} хүрмэгц таны данс руу шилжүүлнэ.</p>
+    const p2 = P.refPct2 != null ? Number(P.refPct2) : 5, p1 = refPct(Date.now());
+    body.appendChild(h(`<div><ul style="margin:0 0 10px;padding-left:20px;line-height:1.55"><li>Аппыг найз, танилдаа санал болгоорой. Таны холбоосоор орж захиалга өгсөн хүн бүрийн төлбөрийн <b>${p1}%</b>-ийг танд урамшуулал болгон олгоно${p1 !== p2 ? ` (${esc(P.refSwitch || "2027-01-01")}-ээс хойш ${p2}% болно)` : ""}.</li><li>Тэдний бүх захиалгад дээрх хувийн урамшуулал үүрд хамаарна.</li><li>Урамшуулал ${money(refMin())} хүрмэгц таны данс руу шилжүүлнэ.</li></ul>
       <label class="f">Нэр<input id="rfName" autocomplete="name" value="${esc(LS.get("kName") || "")}"></label>
       <label class="f">Утас *<input id="rfPhone" inputmode="tel" autocomplete="tel" value="${esc(LS.get("kPhone") || "")}"></label>
       <label class="f">Урамшуулал авах данс (банк, дансны дугаар, эзэмшигч)<input id="rfBank" autocomplete="off" placeholder="Хаан банк 5000123456, Бат"></label>
