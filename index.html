@@ -159,6 +159,9 @@ window.MO_APP_URL = "https://app.monoffset.com/";
     canEdit: isOwner,
     can: function(){ return Promise.resolve(true); }
   };
+  /* 2026-11-23: захиалгын түлхүүрийг солих (шинэ захиалга / дуусаагүй захиалга руу шилжих) ба утсаар дуусаагүй захиалга хайх */
+  window.MO_SETUID = function(v){ if (TOKEN) return null; if (v === undefined) v = "c" + rid(); if (!UID_RE.test(String(v))) return null; UIDV = v; ls("uid", v); return v; };
+  window.MO_DRAFTS = function(phone){ return call("drafts", { phone:phone, base:(window.MO_APP_URL && window.MO_APP_URL.indexOf("<" + "?") < 0) ? window.MO_APP_URL : "" }); };
   window.MO_LOGOUT = function(){ ls("token", null); location.hash = ""; location.reload(); };
 
   var caps = { db:db, sample:sample, mcp:mcp, user:user };
@@ -469,8 +472,8 @@ details *{box-sizing:border-box}.refbox>summary::-webkit-details-marker{display:
         <button id="myGo" class="btn primary wide">Хайх</button>
         <p id="myStatus" class="status" aria-live="polite"></p>
       </div>
-      <div id="myRef"></div>
       <div id="myList"></div>
+      <div id="myRef"></div>
       <div id="myView"></div>
     </div>
     <p class="hint" style="text-align:center">Асуух зүйл байвал <a href="tel:85004321" style="color:var(--seal);font-weight:700">📞 85004321</a> утсаар холбогдоно уу.</p>
@@ -764,8 +767,17 @@ async function orderUpd(uid, patch){
   if (DB){ await DB.doc("orders/"+uid).update(patch); return; }
   const o = localOrders(); o[uid] = { ...(o[uid]||{}), ...patch }; LS.set("orders", o); notifyLocal();
 }
+let MINE_CB = null, MINE_UNSUB = null;
+function switchUid(nu){
+  if (MINE_UNSUB) try { MINE_UNSUB(); } catch(e){}
+  UID = nu; ORDER = null; Object.assign(cust, { files:[], tfiles:[], busy:false, msg:"", err:false, kind:"", passport:null });
+  try { renderCust(); } catch(e){}
+  if (MINE_CB) watchMine(MINE_CB);
+  setCTab("ord"); window.scrollTo({ top:0, behavior:"smooth" });
+}
 function watchMine(cb){
-  if (DB){ DB.doc("orders/"+UID).onSnapshot(s => cb(s.exists ? s.data() : null), () => toast("Захиалгын мэдээлэлтэй холбогдож чадсангүй.")); return; }
+  MINE_CB = cb;
+  if (DB){ MINE_UNSUB = DB.doc("orders/"+UID).onSnapshot(s => cb(s.exists ? s.data() : null), () => toast("Захиалгын мэдээлэлтэй холбогдож чадсангүй.")); return; }
   orderListeners.mine.push(cb); cb(localOrders()[UID] || null);
 }
 function watchAll(cb){
@@ -865,7 +877,7 @@ async function archivePut(phone, entry){
   const id = await phoneId(phone), e = await encObj(phone, entry), path = "archive/" + id, k = numKey(entry.num);
   if (DB){
     try { const s = await DB.doc(path).get(); if (s.exists) await DB.doc(path).update({ items:{ [k]:e } }); else await DB.doc(path).set({ items:{ [k]:e } }); }
-    catch(x){ toast("Харилцагчийн архивт хадгалж чадсангүй."); }
+    catch(x){ if (OWNER && !CUSTVIEW) toast("Харилцагчийн архивт хадгалж чадсангүй."); }
   } else { const a = LS.get("arch_" + id) || { items:{} }; a.items[k] = e; LS.set("arch_" + id, a); }
 }
 async function archiveGet(phone){
@@ -942,7 +954,7 @@ async function certifyCheckRun(sample, src, tr){
     let sN = Math.min(sImg.length, Math.ceil(maxN / 2)), tN = Math.min(tImg.length, maxN - sN); sN = Math.min(sImg.length, maxN - tN);
     const images = lim.images ? [...await Promise.all(sImg.slice(0, sN).map(f => dataUrlBlob(f.img))), ...await Promise.all(tImg.slice(0, tN).map(f => dataUrlBlob(f.img)))] : [];
     const sTxt = src.filter(f => f.text).map(f => f.text).join("\n\n").slice(0, 15000), tTxt = tr.filter(f => f.text).map(f => f.text).join("\n\n").slice(0, 15000);
-    const r = await withTimeout(sample.json(`You are the chief reviewer of a certified translation bureau. A customer asks the bureau to certify (stamp) their own translation. Compare the TRANSLATION with the SOURCE document thoroughly, line by line.
+    const r = await withTimeout(sample.json(`You are the chief reviewer of a certified translation bureau, a professional translator with many years of experience in the field this document belongs to. A customer asks the bureau to certify (stamp) their own translation. Compare the TRANSLATION with the SOURCE document thoroughly, line by line.
 ${images.length ? `Attached images: the first ${sN} are SOURCE pages, the next ${tN} are TRANSLATION pages.` : ""}${sTxt ? `\n\nSOURCE text:\n${sTxt}` : ""}${tTxt ? `\n\nTRANSLATION text:\n${tTxt}` : ""}
 
 Work systematically: go through the source from top to bottom, line by line, and compare each line with the corresponding translation line. List every error exactly once.
@@ -1488,7 +1500,7 @@ function translatePrompt(o){
   if (o.names && o.names.length) extra.push(`Use EXACTLY these customer-confirmed Latin spellings of personal names (keep the [family name]/[surname]/[given name] notes): ${o.names.map(n => `${n.mn} → ${n.latin}`).join("; ")}.`);
   if (en && o.tgt !== "Англи") extra.push(`TARGET LANGUAGE: write the ENTIRE translation in ${langEn(o.tgt)} — every heading, label, sentence, table cell and bracket note (translate the bracket notes listed in rule 3 into ${langEn(o.tgt)}). Do NOT translate into English. The English house-style rules below describe formatting only (name order, date and address order, layout); apply them in ${langEn(o.tgt)}. Personal names are written as the target-language convention requires (Latin letters for Mongolian names unless ${langEn(o.tgt)} has its own script convention for foreign names).`);
   if (o.bilingual) extra.push(`The document contains parallel text in several languages. Translate ONLY the ${o.src} version; ignore the parallel text in other languages.`);
-  return `You are a senior certified translator at the “Mon-Offset” translation bureau in Ulaanbaatar. This is a professional, official certified translation that will be stamped and submitted to authorities: it must be complete, exact and free of errors. Read every word of the source carefully before translating; use the correct official terminology for the document type; never guess — if something is unreadable, mark it. ${o.text != null ? "The text below is" : "The attached image is"} page ${o.i+1} of ${o.n} of an official document. Source language: ${o.src} (named in Mongolian). Translate it into ${en ? langEn(o.tgt) + " (" + o.tgt + ")" : "Mongolian (Cyrillic)"} following the bureau's certified-translation rules:
+  return `You are a senior certified translator at the “Mon-Offset” translation bureau in Ulaanbaatar, with many years of professional experience translating documents of exactly this field and type (legal, notarial, civil-registry, real-estate, corporate, banking, academic, medical or technical — whichever this document belongs to). Use the established terminology, set phrases and official naming conventions that an expert translator specialised in this field would use in the target language, and keep the register of an official document. This is a professional, official certified translation that will be stamped and submitted to authorities: it must be complete, exact and free of errors. Read every word of the source carefully before translating; use the correct official terminology for the document type; never guess — if something is unreadable, mark it. ${o.text != null ? "The text below is" : "The attached image is"} page ${o.i+1} of ${o.n} of an official document. Source language: ${o.src} (named in Mongolian). Translate it into ${en ? langEn(o.tgt) + " (" + o.tgt + ")" : "Mongolian (Cyrillic)"} following the bureau's certified-translation rules:
 1. Keep the original structure and formatting exactly: same order, paragraphs, line breaks, numbering, headings, alignment (centred / right), bold text and tables, so the translated page looks like the source page. This page of the source becomes exactly one page of the translation — translate ALL of it, add nothing, omit nothing, do not summarise. Never change any information from the original.
 2. Copy all numbers, document and registration numbers, amounts and units exactly as in the original. NUMBERING: every item, article, section, clause, paragraph, list and table-row number (1., 1.1, 2.3.4, (a), а), IV, §5, "Article 3", "3 дугаар зүйл") keeps exactly the same number, level and order as in the source — never renumber, restart, skip, merge or add numbers, and never turn numbered items into bullets or vice versa; only the word around it is translated ("3 дугаар зүйл" → "Article 3"). ${en ? "Dates follow the house style below." : "Keep the original date format."}
 3. Describe seals, signatures, photos, emblems, QR codes, barcodes and handwriting in square brackets, translator-style: ${br}. A signature is never read or reproduced: write only the signature note (e.g. [signed]) in the target language.
@@ -1503,7 +1515,7 @@ ${o.scope ? "11" : "10"}. Reply with the translation only — no comments, no pr
 }
 function layoutPrompt(o){
   const rules = translatePrompt({ ...o, text:null, templates:[], scope:"" }).split("\n").filter(l => /^[2-6]\. |^- /.test(l)).join("\n");
-  return `You are a senior certified translator at the “Mon-Offset” translation bureau. The attached image is page ${o.i+1} of ${o.n} of an official document (source language: ${o.src}, named in Mongolian). Translate it into ${o.tgt === "Монгол" ? "Mongolian (Cyrillic)" : o.tgt + " (named in Mongolian)"}.
+  return `You are a senior certified translator at the “Mon-Offset” translation bureau, with many years of professional experience translating documents of exactly this field and type; use the established terminology, set phrases and official naming conventions an expert specialised in this field would use in the target language. The attached image is page ${o.i+1} of ${o.n} of an official document (source language: ${o.src}, named in Mongolian). Translate it into ${o.tgt === "Монгол" ? "Mongolian (Cyrillic)" : o.tgt + " (named in Mongolian)"}.
 The translation will be laid out exactly like the original: the original decorative FRAME (border ornament) and the printed LOGOS/EMBLEMS are kept, everything inside the frame is cleared to white (no background pattern, no stamps, no signatures, no photos), table and field lines are redrawn, and your translated text is written at the position of each original text element. Therefore give the exact positions.
 Rules for the translation text (same as all bureau translations):
 ${rules}
@@ -1519,7 +1531,7 @@ Reply with JSON only:
 {"doc":{"x":<num>,"y":<num>,"w":<num>,"h":<num>},"frame":{"x":<num>,"y":<num>,"w":<num>,"h":<num>}|null,"logos":[{"x":<num>,"y":<num>,"w":<num>,"h":<num>}],"blocks":[{"x":<num>,"y":<num>,"w":<num>,"h":<num>,"size":<num>,"bold":<bool>,"italic":<bool>,"align":"left|center|right","text":"<translation of this line>"}]}`;
 }
 function layoutReviewPrompt(o, js){
-  return `You are the chief reviewer of the “Mon-Offset” certified translation bureau. Below is a JSON list of text blocks with their positions (percent of the attached image) and their draft translation into ${o.tgt === "Монгол" ? "Mongolian" : o.tgt + " (named in Mongolian)"}. Check every block against the source image: correct wrong or missing translations, numbers, dates, names and terms; fix any box that does not fully cover its source text; add blocks for any printed source text that has no block (not for stamps, signatures, photos, emblem, QR/barcodes). Make sure no two blocks overlap and that stamps, signatures, photos, QR codes and barcodes are given only as bracket notes. Keep "doc", "frame" and "logos" unless clearly wrong. Keep correct blocks unchanged. Reply with the complete corrected JSON in the same format only.
+  return `You are the chief reviewer of the “Mon-Offset” certified translation bureau, a professional translator with many years of experience in the field this document belongs to (use that field's established terminology and official naming conventions). Below is a JSON list of text blocks with their positions (percent of the attached image) and their draft translation into ${o.tgt === "Монгол" ? "Mongolian" : o.tgt + " (named in Mongolian)"}. Check every block against the source image: correct wrong or missing translations, numbers, dates, names and terms; fix any box that does not fully cover its source text; add blocks for any printed source text that has no block (not for stamps, signatures, photos, emblem, QR/barcodes). Make sure no two blocks overlap and that stamps, signatures, photos, QR codes and barcodes are given only as bracket notes. Keep "doc", "frame" and "logos" unless clearly wrong. Keep correct blocks unchanged. Reply with the complete corrected JSON in the same format only.
 ${JSON.stringify(js)}`;
 }
 function layoutVerifyPrompt(){
@@ -1578,7 +1590,7 @@ async function layoutTranslate(sample, o, pgI, meta, i){
   return layoutBuild({ bg:bgPath, ar: CH / CW }, blocks);
 }
 function reviewPrompt(o, draft){
-  return `You are the chief reviewer of the “Mon-Offset” certified translation bureau. Below is a draft ${langEn(o.tgt)} translation of page ${o.i+1} of ${o.n} of an official document (source language: ${o.src}, named in Mongolian)${o.text != null ? "; the source text follows the draft" : "; the source page is attached as an image"}.
+  return `You are the chief reviewer of the “Mon-Offset” certified translation bureau, a professional translator with many years of experience in the field this document belongs to (use that field's established terminology and official naming conventions). Below is a draft ${langEn(o.tgt)} translation of page ${o.i+1} of ${o.n} of an official document (source language: ${o.src}, named in Mongolian)${o.text != null ? "; the source text follows the draft" : "; the source page is attached as an image"}.
 Check the draft against the source line by line and correct every error: wrong or missing words, sentences or table cells, wrong numbers, dates, names, register or document numbers, numbering of items/articles/sections/table rows that differs from the source, wrong official terms, grammar and spelling, and any deviation from the bureau rules and house style given here:
 ---
 ${translatePrompt({ ...o, text:null, templates:[] }).split("\n").slice(1).join("\n")}
@@ -1902,7 +1914,19 @@ const paidSum = o => (o.received != null ? Number(o.received) : 0);
 const STEP = { new:1, analyzed:1, quoted:2, claimed:3, underpaid:3, paid:4, translating:4, ownerCheck:4, review:5, revision:5, approved:6, done:6 };
 const cust = { files:[], tfiles:[], svc:"translate", busy:false, msg:"", err:false, kind:"", passport:null };
 function setSteps(st){ const k = STEP[st] || 1; document.querySelectorAll("#steps i").forEach((x, i) => x.classList.toggle("on", i < k)); }
+// 2026-11-23: дэлгэц хоосон үлдэхээс сэргийлж алдааг барьж, дахин ачаалах товч харуулна
+let custErrAt = 0;
 function renderCust(){
+  try { renderCust0(); }
+  catch(e){
+    console.error(e);
+    const v = $("#custView"); if (!v) return;
+    $("#cTabs").hidden = false; $("#steps").hidden = false;
+    v.innerHTML = ""; v.appendChild(h(`<div class="card"><h2>Түр алдаа гарлаа</h2><p>Хуудсыг дахин ачаалаад үргэлжлүүлнэ үү. Таны захиалга хадгалагдсан.</p><button class="btn primary wide" data-nolock onclick="location.reload()">Дахин ачаалах</button><p class="hint" style="margin-top:8px">Асуух зүйл байвал 📞 ${PHONE}</p></div>`));
+    if (ORDER && UID && Date.now() - custErrAt > 60000){ custErrAt = Date.now(); orderUpd(UID, { clientError:{ msg:String(e && (e.stack || e.message) || e).slice(0, 400), at:Date.now(), ua:navigator.userAgent.slice(0, 160) } }).catch(() => {}); }
+  }
+}
+function renderCust0(){
   clearTimeout(custTimer);
   const v = $("#custView"); v.innerHTML = ""; const o = ORDER;
   if (NOACCESS){
@@ -2610,7 +2634,9 @@ function custDelivery(o){
       d.paper = sel("dP"); d.phone = box.querySelector("#dPh").value.trim(); if (!d.phone) return toast("Утасны дугаараа оруулна уу.");
       if (d.paper === "courier"){ d.address = box.querySelector("#dAd").value.trim(); if (!d.address) return toast("Хүргүүлэх хаягаа оруулна уу."); d.fee = fee; }
     }
-    await orderUpd(UID, { status:"done", delivery:d, doneAt:Date.now() });
+    // 2026-11-23: дууссан орчуулгыг харилцагчийн талаас шууд архивт бичнэ (утас/дугаараар хайхад шууд олдоно)
+    try { if (o.translation && o.translation.num) await archivePut(o.phone, { num:o.translation.num, date:o.translation.date, dir: o.tgtLang === "Монгол" ? "toMN" : "toEN", src:o.srcLang, tgt:o.tgtLang, pages:o.translation.pages, seal:d.seal !== false, name:o.name }); } catch(e){}
+    await orderUpd(UID, { status:"done", delivery:d, doneAt:Date.now(), custArchived: Date.now() });
   };
   return box;
 }
@@ -2661,6 +2687,7 @@ function custDone(o){
   }
   box.querySelector("#xNew").before(complaintBlock(o));
   box.querySelector("#xNew").onclick = async () => {
+    if (typeof window.MO_SETUID === "function" && !OWNER){ const nu = window.MO_SETUID(); if (nu){ switchUid(nu); return; } }   // 2026-11-23: вэб — дууссан захиалгыг хэвээр үлдээж шинэ дугаараар эхэлнэ
     const hist = [...(o.history||[]), { oid:o.oid, num:(o.translation||{}).num, at:o.doneAt }];
     await orderSet(UID, { uid:UID, status:"new", history:hist, registered:true, createdAt:Date.now(), updatedAt:Date.now(), ...refKeep() });
   };
@@ -2685,8 +2712,9 @@ function renderDrafts(){
     const r = h(`<div class="my-row"><div><div class="n">${esc(x.num || "Захиалга")}</div><div class="m">${esc((ST_LABEL[x.st] || [x.st])[0])}${x.lang ? ", " + esc(x.lang) : ""}</div></div><button class="btn primary" data-nolock>Үргэлжлүүлэх</button></div>`);
     r.querySelector("button").onclick = () => {
       if (x.uid === UID){ setCTab("ord"); window.scrollTo({ top:0, behavior:"smooth" }); return; }
+      if (typeof window.MO_SETUID === "function" && window.MO_SETUID(x.uid)){ switchUid(x.uid); return; }   // 2026-11-23: вэб/апп — тухайн захиалга руу шууд шилжинэ
       const u = draftUrl(x.uid); if (u === APP_URL){ setCTab("ord"); return; }
-      try { window.open(u, "_top"); } catch(e){ location.href = u; }
+      try { location.assign(u); } catch(e){ location.href = u; }
     };
     c.appendChild(r);
   });
@@ -2757,6 +2785,8 @@ async function mySearch(){
   if (phoneFull) LS.set("kPhone", ph);
   myStatus("Хайж байна…"); $("#myGo").disabled = true;
   try {
+    my.drafts = null;
+    if (phoneFull && typeof window.MO_DRAFTS === "function") window.MO_DRAFTS(ph).then(r => { my.drafts = r; renderMy(); }).catch(() => {});
     if (phoneFull) my.list = await archiveGet(ph);
     else { const e = await archiveGetByNum(nm); my.list = e ? [e] : []; if (e) my.phone = e.phone || ""; }
     myStatus("");
@@ -2769,6 +2799,8 @@ $("#myGo").onclick = () => { my.view = null; mySearch(); };
 function renderMy(){
   const box = $("#myList"); box.innerHTML = ""; $("#myView").innerHTML = "";
   if (!my.list) return;
+  const dr = my.drafts;
+  if (dr && (dr.n > 0 || dr.n === -1)) box.appendChild(h(`<div class="note warn"><p>${dr.n === -1 ? "Дуусаагүй захиалгын холбоосыг саяхан таны имэйл рүү илгээсэн. Имэйлээ шалгана уу." : `Энэ дугаартай <b>${dr.n}</b> дуусаагүй захиалга байна. ${dr.mailed ? "Үргэлжлүүлэх холбоосыг захиалга өгөхдөө бичсэн имэйл рүү тань илгээлээ." : `Захиалгад имэйл бүртгэгдээгүй тул ${PHONE} утсаар холбогдоно уу.`}`}</p></div>`));
   const list = my.list.filter(e => !my.num || String(e.num).toUpperCase() === my.num);
   if (!list.length){ box.appendChild(h(`<div class="note info"><p>${my.phone ? `${esc(my.phone)} дугаарт` : `${esc(my.num)} дугаартай`} бүртгэлтэй, дууссан орчуулга олдсонгүй. Захиалга өгөхдөө бичсэн утасны дугаараа шалгана уу. Дуусаагүй захиалга дээрх «Дуусаагүй орчуулга» хэсэгт харагдана. Асуух зүйл байвал 📞 ${PHONE}</p></div>`)); return; }
   list.forEach(e => {
@@ -2916,6 +2948,7 @@ function orderCard(o){
   }; acts.appendChild(b); return b; };
   if (false && o.analysis && o.analysis.bilingual && o.analysis.consistent === false) body.appendChild(h(`<div class="note warn" style="font-size:14px"><p>Хэл хоорондын зөрүү: ${esc((o.analysis.differences||[]).join("; "))}</p></div>`));
   if (o.ref) body.appendChild(h(`<p class="hint" style="margin:2px 0 6px">🤝 Санал болгосон код: <b>${esc(o.ref)}</b></p>`));
+  if (o.clientError && Date.now() - (o.clientError.at || 0) < 7 * 86400000) body.appendChild(h(`<p class="hint" style="margin:2px 0 6px;color:var(--seal)">⚠ Харилцагчийн дэлгэц дээр алдаа: ${esc(String(o.clientError.msg || "").split("\n")[0].slice(0, 140))}</p>`));
   if (o.quote && o.quote.total){   // 2026-11-22: үнийн тооцооны дэлгэрэнгүйг зөвхөн админд
     body.appendChild(h(`<details class="help" style="margin:4px 0 8px"><summary>Үнийн тооцоо</summary><table class="q">${quoteRows(o.quote)}<tr class="tot"><td>Нийт дүн (НӨАТ ороогүй)</td><td class="n">${money(o.quote.total)}</td></tr></table></details>`));
   }
@@ -3033,7 +3066,23 @@ function orderCard(o){
       });
     }
   }
+  // 2026-11-23: дуусаагүй захиалгыг админ устгаж болно
+  if (o.status !== "done") btn("🗑 Устгах", "danger", () => new Promise(res => {
+    const m = $("#modal"), x = $("#modalBox");
+    x.innerHTML = `<h3>Захиалгыг устгах уу?</h3><p>${esc(o.num || o.oid || "")} · ${esc(o.name || "")} · ${esc(o.phone || "")}</p><p class="hint">Дуусаагүй энэ захиалга, эх материалын зургуудын хамт бүрмөсөн устгагдана. Буцаах боломжгүй.</p><div class="row"><button id="odYes" class="btn danger" data-nolock>Тийм, устгах</button><button id="odNo" class="btn" data-nolock>Болих</button></div>`;
+    m.hidden = false;
+    x.querySelector("#odNo").onclick = () => { m.hidden = true; res(); };
+    x.querySelector("#odYes").onclick = async () => { x.querySelector("#odYes").disabled = true; try { await deleteOrder(o); toast("Захиалга устгагдлаа."); } catch(e){ toast("Устгаж чадсангүй."); } m.hidden = true; res(); };
+  }));
   return c;
+}
+async function deleteOrder(o){
+  if (DB){
+    for (let i = 0; i < Math.max(o.pages || 0, 1); i++) await DB.doc(`orders/${o.uid}/pages/p${i}`).delete().catch(() => {});
+    for (let i = 0; i < (o.tpages || 0); i++) await DB.doc(`orders/${o.uid}/tpages/p${i}`).delete().catch(() => {});
+    await DB.doc("orders/" + o.uid).delete();
+  } else { const a = localOrders(); delete a[o.uid]; LS.set("orders", a); }
+  ORDERS = ORDERS.filter(x => x.uid !== o.uid); renderOrders();
 }
 function reaccessCard(o){
   const ra = o.reaccess;
@@ -3219,7 +3268,7 @@ async function certifyDraft(o, sample){
     const lim = await sample.limits().catch(() => ({})); const maxN = (lim.images && lim.images.maxCount) || 5;
     const imgs = lim.images ? await Promise.all(srcImgs.filter(x => x.img).slice(0, maxN).map(x => dataUrlBlob(x.img))) : [];
     const srcTxt = srcImgs.filter(x => x.text).map(x => x.text).join("\n\n").slice(0, 15000);
-    const r = await Promise.race([sample.json(`You are the chief reviewer of the “Mon-Offset” certified translation bureau. The customer's own translation (below, one entry per page) was checked against the SOURCE document${imgs.length ? " (attached images)" : ""} and these errors were found:
+    const r = await Promise.race([sample.json(`You are the chief reviewer of the “Mon-Offset” certified translation bureau, a professional translator with many years of experience in the field this document belongs to (use that field's established terminology and official naming conventions). The customer's own translation (below, one entry per page) was checked against the SOURCE document${imgs.length ? " (attached images)" : ""} and these errors were found:
 ${o.certFail.issues.map((x, i) => `${i+1}. ${x}`).join("\n")}
 
 Correct ONLY these errors (and nothing else) so the translation matches the source exactly. Keep all other text, wording and markup (# , >> , **…**, *…*, | ) unchanged.
@@ -3442,8 +3491,9 @@ $("#sendCust").onclick = async () => {
   if (!S.orderUid) return;
   if (!S.pages.some(p => p.trim())) return toast("Орчуулгын бичвэр хоосон байна.");
   if (!S.num) return toast("Орчуулгын дугаар оруулна уу.");
-  await orderUpd(S.orderUid, { status:"review", translation:{ num:S.num, date:S.date, pages:[...S.pages] } });
+  await orderUpd(S.orderUid, { status:"review", readyAt:Date.now(), translation:{ num:S.num, date:S.date, pages:[...S.pages] } });
   await bumpLast(S.num);
+  { const fo = ORDERS.find(x => x.uid === S.orderUid); if (fo && fo.email && !fo.readyMailed) notifyReady({ ...fo, num: fo.num || S.num }); }   // 2026-11-23: ноорог бэлэн болсныг имэйлээр
   toast("Харилцагчид хянуулахаар илгээлээ."); showTab("orders");
 };
 
@@ -3531,7 +3581,7 @@ async function runAudit(){
       const lim = await sample.limits().catch(() => ({})); const maxN = (lim.images && lim.images.maxCount) || 5;
       const images = lim.images ? await Promise.all(srcs.filter(x => x.img).slice(0, maxN).map(x => dataUrlBlob(x.img))) : [];
       const sTxt = srcs.filter(x => x.text).map(x => x.text).join("\n\n").slice(0, 15000);
-      const r = await Promise.race([sample.json(`You are the chief reviewer of the “Mon-Offset” certified translation bureau. Check this finished ${langEn(o.tgtLang)} translation against the SOURCE document${images.length ? " (attached images)" : ""} line by line.
+      const r = await Promise.race([sample.json(`You are the chief reviewer of the “Mon-Offset” certified translation bureau, a professional translator with many years of experience in the field this document belongs to (use that field's established terminology and official naming conventions). Check this finished ${langEn(o.tgtLang)} translation against the SOURCE document${images.length ? " (attached images)" : ""} line by line.
 Report only real translation errors: wrong or missing words, sentences or table cells; wrong numbers, dates, names, IDs; numbering of items, articles, sections or table rows that differs from the source (renumbered, skipped, restarted, missing); wrong meaning (negation, shall/may/must, who does what); wrong official terms; clear grammar or spelling mistakes; violations of these rules: long vowels after я/е/ё/ю written once (Туяа → Tuya, Цэеэ → Tseye, Ёотон → Yoton, Юутай → Yutai); at most one [Illegible] mark in a row. Do NOT report stamp/seal/signature notes in brackets, any number inside a stamp, seal, logo, emblem or watermark (stamp numbers, founding years), or stylistic choices that keep the exact meaning.
 For each error give the exact wrong text from the translation ("before", copied character for character so it can be found) and the corrected text ("after").
 Reply with JSON only: {"errors":[{"page":<n>,"before":"...","after":"...","note":"<the error, in Mongolian>"}]}
