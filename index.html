@@ -593,9 +593,9 @@ details *{box-sizing:border-box}.refbox>summary::-webkit-details-marker{display:
     </div>
     <div class="card">
       <h2>Орчуулгын маягтууд</h2>
-      <p class="hint">Баримтын төрөл тус бүрийн баталгаат орчуулгын маягт. AI ижил төрлийн баримтад маягтыг дагаж, тохирох маягтгүй бол эх материалын бүтцээр орчуулна.</p>
+      <p class="hint">Маягтууд Google Drive-ийн <b>TrAI / SAMPLES</b> хавтаснаас автоматаар уншигдана. Эх материал энэ жагсаалтад орсон бол загварт орсон орчуулгын тарифаар тооцогдож, тухайн жишгийн загвараар орчуулагдана. Шинэ маягт нэмэх бол SAMPLES хавтсанд JPEG оруулна (олон хуудастай бол «Нэр», «Нэр (2)»…), дараа нь доорх товчийг дарна.</p>
       <div id="tplList"></div>
-      <button id="tplAdd" class="btn ghost wide" data-nolock>Маягт нэмэх</button>
+      <button id="tplSync" class="btn ghost wide" data-nolock>🔄 SAMPLES хавтаснаас шинэчлэх</button>
     </div>
     <div class="card">
       <h2>Төлбөрийн данс</h2>
@@ -607,7 +607,6 @@ details *{box-sizing:border-box}.refbox>summary::-webkit-details-marker{display:
     <div class="card">
       <h2>Автомат орчуулга</h2>
       <label class="check"><input type="checkbox" id="sAuto"><span>AI автомат орчуулга идэвхтэй<br><small style="color:var(--muted)">Унтраавал төлбөр баталсны дараа AI ажиллахгүй, та гараар орчуулна</small></span></label>
-      <label class="check"><input type="checkbox" id="sLayout"><span>Эх баримтын хүрээ, лого, загвараар орчуулах<br><small style="color:var(--muted)">Зурган материалын хүрээ, хээ угалз, лого, хүснэгтийн зураас, байрлалыг хадгална; тамга, гарын үсэг, арын хээ, зураг гарахгүй (хаалтад тэмдэглэнэ). Унтраавал энгийн бичвэр хэлбэрээр орчуулна.</small></span></label>
       <p class="hint">Ноорог харилцагчид шууд гарч, засварын дүрмээр (98%, утга, чухал мэдээлэл) хянагдана. Зөвхөн «Миний хяналтаар» чагттай маягтад таарсан баримт таны хяналтаар гарна.</p>
       <div class="grid2">
         <label class="f">Яаралтай үйлчилгээний нэмэлт төлбөр (0 = байхгүй)<input id="pExpFee" inputmode="numeric"></label>
@@ -621,6 +620,8 @@ details *{box-sizing:border-box}.refbox>summary::-webkit-details-marker{display:
       <div class="grid2">
         <label class="f">Дугаарын угтвар<input id="sPrefix"></label>
         <label class="f">Сүүлд ашигласан дугаар<input id="sLast" inputmode="numeric"></label>
+        <label class="f">Тооны орон (1 → MO26A01, 3 → MO26A0001)<input id="sPad" inputmode="numeric"></label>
+        <p class="hint" id="sNumPrev" style="align-self:end"></p>
       </div>
       <label class="f">Орчуулагчийн нэр (хөлд гарна, хоосон байж болно)<input id="sTrans"></label>
     </div>
@@ -892,19 +893,23 @@ const untilOf = e => e.until || addMonth(dateMs(e.date));
 const ctxFromEntry = e => ({ dir:e.dir, src: e.dir === "toMN" ? e.src : e.tgt, from:e.src, date:e.date, num:e.num, pages:e.pages || [""], seal:e.seal !== false });
 
 /* ---------- Numbering ---------- */
-const numOf = s => { const m = String(s||"").match(/(\d+)\s*$/); return m ? parseInt(m[1],10) : 0; };
+// 2026-11-23: дугаар = угтвар + дараалал (жишээ MO26A0 + 1 → MO26A01). Угтварын дараах тоог л уншина; хэт том (хуучин 26013 гэх мэт) утгыг тооцохгүй.
+const numPad = () => { const v = Number(C.pad); return v >= 1 && v <= 6 ? v : (/0$/.test(C.prefix || "") ? 1 : 3); };
+const isTplOrder = o => !!(o && o.quote && o.quote.calc && o.quote.calc.tpl) || !!(o && o.templateIndex >= 0 && TPL[o.templateIndex]);   // 2026-11-23: загварт орсон орчуулга (Word-оор өгөхгүй)
+const fmtNum = n => C.prefix + String(n).padStart(numPad(), "0");
+const numOf = s => { s = String(s || "").trim(); if (!C.prefix || !s.startsWith(C.prefix)) return 0; const r = s.slice(C.prefix.length); if (!/^\d+$/.test(r)) return 0; const v = parseInt(r, 10); return v > (Number(C.last) || 0) + 5000 ? 0 : v; };
 function nextNum(){
   let mx = C.last;
   REG.forEach(r => { if (String(r.num).startsWith(C.prefix)) mx = Math.max(mx, numOf(r.num)); });
   ORDERS.forEach(o => { [o.num, o.translation && o.translation.num].forEach(n => { if (n && String(n).startsWith(C.prefix)) mx = Math.max(mx, numOf(n)); }); });
   NUMS.forEach(n => { if (String(n).startsWith(C.prefix)) mx = Math.max(mx, numOf(n)); });
-  return C.prefix + String(mx + 1).padStart(3, "0");
+  return fmtNum(mx + 1);
 }
 async function claimNum(){
   let n = C.last + 1;
   ORDERS.forEach(o => { if (o.num && String(o.num).startsWith(C.prefix)) n = Math.max(n, numOf(o.num) + 1); });
   for (let t = 0; t < 300; t++, n++){
-    const num = C.prefix + String(n).padStart(3, "0");
+    const num = fmtNum(n);
     if (DB){
       const ref = DB.doc("numbers/" + num); const s = await ref.get(); if (s.exists) continue;
       await ref.set({ uid:UID, at:Date.now() }); await new Promise(r => setTimeout(r, 700));
@@ -1639,6 +1644,7 @@ async function findSampleModel(sample, o){
   try {
     if (!SAMPLE_LIST){ const r = await m.callTool("Google Drive", "search_files", { query:`parentId = '${SAMPLE_FOLDER}' and trashed = false`, pageSize:100, excludeContentSnippets:true }); SAMPLE_LIST = ((((r && (r.payload || r)) || {}).files) || []).filter(f => !/folder/.test(f.mimeType || "")); }
   } catch(e){ SAMPLE_LIST = []; }
+  SAMPLE_LIST = SAMPLE_LIST.filter(f => /image\/(jpe?g|png|webp)|pdf|wordprocessingml|msword/.test(f.mimeType || ""));
   if (!SAMPLE_LIST.length) return null;
   const an = o.analysis || {};
   // нэг жишгийн олон хуудас: "Нэр", "Нэр (2)", "Нэр (3)"
@@ -1646,7 +1652,9 @@ async function findSampleModel(sample, o){
   const pno = t => { const m = String(t || "").replace(/\.(jpe?g|png|pdf|docx?)$/i, "").match(/\((\d+)\)\s*$/); return m ? +m[1] : 1; };
   const bases = [...new Set(SAMPLE_LIST.map(f => base(f.title)))];
   let idx = -1;
-  try {
+  const tpN = o.templateIndex >= 0 && TPL[o.templateIndex] ? sampleBase(TPL[o.templateIndex].name).toLowerCase() : "";
+  if (tpN) idx = bases.findIndex(b => b.toLowerCase() === tpN);   // 2026-11-23: маягт = SAMPLES жишиг тул шууд
+  if (idx < 0) try {
     const r = await aiCall(sample, `A customer's document must be translated from ${o.srcLang} into ${o.tgtLang} (languages named in Mongolian). About the document: type "${an.docType || ""}", kind "${an.docKind || o.docKind || ""}", ${o.pages || 1} page(s).
 The bureau keeps sample translations of these kinds of documents (titles):
 ${bases.map((b, i) => `${i}. ${b}`).join("\n")}
@@ -1721,6 +1729,8 @@ async function findPastTranslation(o){
   }
   return best && best.score >= Math.max(3, allWords.length) ? { title:best.title, text:best.text } : null;
 }
+// 2026-11-23: TrAI файлын нэр «утас-дугаар – нэр – хэл» (утсаар хайхад олдоно)
+const driveTitle = (phone, num, name, langs, tail = "") => { const ph = digits(phone || ""); return `${ph ? ph + "-" : ""}${num}${name ? " – " + name : ""} – ${langs}${tail}.docx`; };
 async function driveSaveDocx(ctx, title){
   const m = await withTimeout(cap("mcp"), 11000); if (!m) throw { code:"unavailable" };
   const blob = await makeDocx(ctx);
@@ -1732,7 +1742,7 @@ async function driveSaveOrder(o){
   if (driveBusy.has(o.uid) || !o.translation || !o.translation.num) return; driveBusy.add(o.uid);
   try {
     const d = o.delivery || {}, t = o.translation;
-    const id = await driveSaveDocx(ctxFromOrder(o, d.seal !== false), `${t.num} – ${o.name || o.phone || ""} – ${o.srcLang}-${o.tgtLang}.docx`);
+    const id = await driveSaveDocx(ctxFromOrder(o, d.seal !== false), driveTitle(o.phone, t.num, o.name, `${o.srcLang}-${o.tgtLang}`));
     await orderUpd(o.uid, { driveId:id, driveError:"" });
   } catch(e){ try { await orderUpd(o.uid, { driveError: (e && e.code) || "error" }); } catch(x){} }
   finally { driveBusy.delete(o.uid); }
@@ -2635,7 +2645,7 @@ function custDelivery(o){
       if (d.paper === "courier"){ d.address = box.querySelector("#dAd").value.trim(); if (!d.address) return toast("Хүргүүлэх хаягаа оруулна уу."); d.fee = fee; }
     }
     // 2026-11-23: дууссан орчуулгыг харилцагчийн талаас шууд архивт бичнэ (утас/дугаараар хайхад шууд олдоно)
-    try { if (o.translation && o.translation.num) await archivePut(o.phone, { num:o.translation.num, date:o.translation.date, dir: o.tgtLang === "Монгол" ? "toMN" : "toEN", src:o.srcLang, tgt:o.tgtLang, pages:o.translation.pages, seal:d.seal !== false, name:o.name }); } catch(e){}
+    try { if (o.translation && o.translation.num) await archivePut(o.phone, { num:o.translation.num, date:o.translation.date, dir: o.tgtLang === "Монгол" ? "toMN" : "toEN", src:o.srcLang, tgt:o.tgtLang, pages:o.translation.pages, seal:d.seal !== false, name:o.name, tpl: isTplOrder(o) }); } catch(e){}
     await orderUpd(UID, { status:"done", delivery:d, doneAt:Date.now(), custArchived: Date.now() });
   };
   return box;
@@ -2820,7 +2830,7 @@ function renderMyView(){
     const box = h(`<div class="card"><h2>${esc(e.num)}</h2>
       <div class="note ok"><p>${fmtDate(until)} хүртэл үнэгүй үзэж, хэдэн ч удаа татаж авах боломжтой.</p></div>
       <p class="hint" style="margin-bottom:4px">Файлын төрөл</p>
-      <div class="seg" id="mvFmt"><button data-v="pdf" class="on">PDF</button><button data-v="docx">Word</button></div>
+      <div class="seg" id="mvFmt"><button data-v="pdf" class="on">PDF</button><button data-v="docx"${e.tpl ? ' disabled title="Загварт орсон орчуулгыг зөвхөн PDF-ээр өгнө"' : ""}>Word</button></div>${e.tpl ? `<p class="hint" style="margin:-4px 0 8px">Загварт орсон орчуулгыг зөвхөн PDF-ээр өгнө.</p>` : ""}
       <div class="seg" id="mvSeal"><button data-v="1" class="on">Тамгатай</button><button data-v="0">Тамгагүй</button></div>
       <p class="hint" style="margin-bottom:4px">Авах хэлбэр</p>
       <label class="opt"><input type="radio" name="mvM" value="dl" checked><span>Татаж авах</span></label>
@@ -3213,13 +3223,13 @@ async function autoDraft(o){
       const meta = { i, n:imgs.length, scope, past, model, src:o.srcLang, tgt:o.tgtLang, bilingual:!!o.bilingual, names:o.names || [], ...(pgI.text != null ? { text:pgI.text } : {}) };
       const media = pgI.text != null ? {} : { images:[pgI.blob] };
       await prog(o, { done:i, total:imgs.length, page:i+1, stage:"translate" });
-      if (pgI.blob && DB && C.layoutFrame === true && !model){   // 2026-11-18 21:42: эх баримтын хүрээ, лого, загвараар; тамга, гарын үсэг, арын хээ, зураг гаргахгүй
+      if (false){   // 2026-11-23: хүрээ/лого хуулах горимыг хассан   // 2026-11-18 21:42: эх баримтын хүрээ, лого, загвараар; тамга, гарын үсэг, арын хээ, зураг гаргахгүй
         let lt = null; try { lt = await layoutTranslate(sample, o, pgI, meta, i); } catch(e){ console.error(e); }
         if (lt){ pages.push(lt); srcUsed.push({ pg:pgI, scope }); await prog(o, { done:i+1, total:imgs.length, page:Math.min(i+2, imgs.length), stage:"translate" }); continue; }
       }
       const tplSel = (o.templateIndex >= 0 && TPL[o.templateIndex]) ? [TPL[o.templateIndex]] : TPL;
       const mMedia = model && model.images.length ? { images:[...(media.images || []), ...model.images] } : media;
-      const r = await aiCall(sample, translatePrompt({ ...meta, templates: model ? [] : tplSel }), { ...mMedia, cache:false, modelTier:"complex" }, o);
+      const r = await aiCall(sample, translatePrompt({ ...meta, templates: model ? [] : tplSel.filter(t => (t.text || "").trim()) }), { ...mMedia, cache:false, modelTier:"complex" }, o);
       let txt = clean(r.text);
       if (!txt) throw { code:"empty" };
       toast(`${o.num}: ${i+1}/${imgs.length} хуудсыг шалгаж байна…`);
@@ -3384,7 +3394,7 @@ async function syncRegister(){
     if (o.status !== "done" || o.registered || !o.translation || !o.translation.num) continue;
     const d = o.delivery || {};
     await saveRecord({ num:o.translation.num, date:o.translation.date, dir: o.tgtLang === "Монгол" ? "toMN" : "toEN", lang:`${o.srcLang} → ${o.tgtLang}`, name:o.name, phone:o.phone, email:d.email || "", pages:(o.translation.pages||[]).length, order:o.oid, amount:paidSum(o), seal:d.seal !== false, delivery: d.method === "paper" ? (d.paper === "courier" ? "Хүргэлт" : "Өөрөө авна") : d.method === "email" ? "Имэйл" : "PDF", createdAt:Date.now() });
-    await archivePut(o.phone, { num:o.translation.num, date:o.translation.date, dir: o.tgtLang === "Монгол" ? "toMN" : "toEN", src:o.srcLang, tgt:o.tgtLang, pages:o.translation.pages, seal:d.seal !== false, name:o.name });
+    await archivePut(o.phone, { num:o.translation.num, date:o.translation.date, dir: o.tgtLang === "Монгол" ? "toMN" : "toEN", src:o.srcLang, tgt:o.tgtLang, pages:o.translation.pages, seal:d.seal !== false, name:o.name, tpl: isTplOrder(o) });
     await bumpLast(o.translation.num);
     try { await orderUpd(o.uid, { registered:true }); } catch(e){}
   }
@@ -3449,10 +3459,10 @@ async function goTranslate(){
   let jobs;
   if (S.mode === "img"){
     if (!S.images.length) return status("Эх баримтын зургаа сонгоно уу.", true);
-    jobs = await Promise.all(S.images.map(async (im, i, a) => im.text != null ? { input: translatePrompt({ i, n:a.length, src, tgt, text:im.text, bilingual:bil, templates:TPL }), meta:{ i, n:a.length, src, tgt, text:im.text, bilingual:bil } } : { input: translatePrompt({ i, n:a.length, src, tgt, bilingual:bil, templates:TPL }), images:[await dataUrlBlob(im.url)], meta:{ i, n:a.length, src, tgt, bilingual:bil } }));
+    jobs = await Promise.all(S.images.map(async (im, i, a) => im.text != null ? { input: translatePrompt({ i, n:a.length, src, tgt, text:im.text, bilingual:bil, templates:TPL.filter(t => (t.text || "").trim()) }), meta:{ i, n:a.length, src, tgt, text:im.text, bilingual:bil } } : { input: translatePrompt({ i, n:a.length, src, tgt, bilingual:bil, templates:TPL.filter(t => (t.text || "").trim()) }), images:[await dataUrlBlob(im.url)], meta:{ i, n:a.length, src, tgt, bilingual:bil } }));
   } else {
     const t = $("#srcText").value.trim(); if (!t) return status("Эх бичвэрээ оруулна уу.", true);
-    jobs = [{ input: translatePrompt({ i:0, n:1, src, tgt, text:t, bilingual:bil, templates:TPL }), meta:{ i:0, n:1, src, tgt, text:t, bilingual:bil } }];
+    jobs = [{ input: translatePrompt({ i:0, n:1, src, tgt, text:t, bilingual:bil, templates:TPL.filter(t => (t.text || "").trim()) }), meta:{ i:0, n:1, src, tgt, text:t, bilingual:bil } }];
   }
   S.pages = jobs.map(() => ""); renderEditors(); schedulePreview();
   $("#go").disabled = true; $("#stop").hidden = false; ctl = new AbortController();
@@ -3506,7 +3516,7 @@ async function registerStandalone(){
   if (S.phone) await archivePut(S.phone, { num:S.num, date:S.date, dir:S.dir, src: S.dir === "toMN" ? S.src : "Монгол", tgt: S.dir === "toMN" ? "Монгол" : S.src, pages:[...S.pages], seal:S.seal, name:S.name });
   await bumpLast(S.num); S.savedNum = S.num; renderReg();
   $("#saveNote").textContent = `${S.num} бүртгэлд хадгалагдлаа.`;
-  try { await driveSaveDocx(ctxFromS(), `${S.num} – ${S.name || ""} – ${S.dir === "toMN" ? S.src + "-Монгол" : "Монгол-" + S.src}.docx`); $("#saveNote").textContent = `${S.num} бүртгэл болон Drive-ийн TrAI хавтсанд хадгалагдлаа.`; }
+  try { await driveSaveDocx(ctxFromS(), driveTitle(S.phone, S.num, S.name, S.dir === "toMN" ? S.src + "-Монгол" : "Монгол-" + S.src)); $("#saveNote").textContent = `${S.num} бүртгэл болон Drive-ийн TrAI хавтсанд хадгалагдлаа.`; }
   catch(e){ $("#saveNote").textContent = `${S.num} бүртгэлд хадгалагдлаа. Drive-д хадгалж чадсангүй.`; }
 }
 async function exportAs(kind){
@@ -3561,8 +3571,8 @@ function renderAudit(){
       const tr = { ...o.translation, pages, auditFixedAt:Date.now() };
       await orderUpd(o.uid, { translation:tr, audit:{ ...o.audit, status:"fixed", applied, decidedAt:Date.now() } });
       const fo = { ...o, translation:tr };
-      try { await archivePut(o.phone, { num:tr.num, date:tr.date, dir: o.tgtLang === "Монгол" ? "toMN" : "toEN", src:o.srcLang, tgt:o.tgtLang, pages, seal:(o.delivery||{}).seal !== false, name:o.name }); } catch(e){}
-      try { await driveSaveDocx(ctxFromOrder(fo, (o.delivery||{}).seal !== false), `${tr.num} – ${o.name || o.phone || ""} – ${o.srcLang}-${o.tgtLang} (зассан).docx`); } catch(e){}
+      try { await archivePut(o.phone, { num:tr.num, date:tr.date, dir: o.tgtLang === "Монгол" ? "toMN" : "toEN", src:o.srcLang, tgt:o.tgtLang, pages, seal:(o.delivery||{}).seal !== false, name:o.name, tpl: isTplOrder(o) }); } catch(e){}
+      try { await driveSaveDocx(ctxFromOrder(fo, (o.delivery||{}).seal !== false), driveTitle(o.phone, tr.num, o.name, `${o.srcLang}-${o.tgtLang}`, " (зассан)")); } catch(e){}
       toast(`${tr.num}: ${applied} засвар хийгдэж хадгалагдлаа.`);
     };
     no.onclick = () => orderUpd(o.uid, { audit:{ ...o.audit, status:"rejected", decidedAt:Date.now() } });
@@ -3616,19 +3626,20 @@ $("#regCsv").onclick = () => {
 
 /* ---------- Settings ---------- */
 function fillSettings(){
-  $("#sPrefix").value = C.prefix; $("#sLast").value = C.last; $("#sTrans").value = C.translator;
+  $("#sPrefix").value = C.prefix; $("#sLast").value = C.last; $("#sPad").value = numPad(); $("#sTrans").value = C.translator;
+  const np = () => { const pre = $("#sPrefix").value.trim() || "MO26", pd = Number($("#sPad").value) || 1; $("#sNumPrev").textContent = "Дараагийн дугаар: " + pre + String((Number($("#sLast").value.replace(/\D/g, "")) || 0) + 1).padStart(pd, "0"); };
+  ["#sPrefix", "#sLast", "#sPad"].forEach(k => $(k).oninput = np); np();
   $("#pCert").value = P.cert || ""; $("#pMin").value = P.min || ""; $("#pRef1").value = P.refPct1 != null ? P.refPct1 : 10; $("#pRef2").value = P.refPct2 != null ? P.refPct2 : 5; $("#pRefD").value = P.refSwitch || "2027-01-01"; $("#pRefMin").value = P.refMin || 10000; $("#pCourier").value = P.courier; $("#pFree").value = P.freeOver; $("#pReopen").value = P.reopen || "";
-  $("#pTplP").value = P.tplPage || 15000; $("#pMnP").value = P.pageMn || 25000; $("#pFFP").value = P.pageFF || 40000; $("#pStdC").value = P.stdChars || 1800; $("#pStd").value = P.stdWords || 600; $("#sAuto").checked = C.autoOn !== false; $("#sLayout").checked = C.layoutFrame === true; $("#pExpFee").value = P.expressFee || ""; $("#pRevFee").value = P.reviewFee || ""; $("#pExpH").value = P.expressHours || 1; $("#pKeep").value = P.keepSrcDays || 30; $("#pFix").value = P.fixPerError || 2500;
+  $("#pTplP").value = P.tplPage || 15000; $("#pMnP").value = P.pageMn || 25000; $("#pFFP").value = P.pageFF || 40000; $("#pStdC").value = P.stdChars || 1800; $("#pStd").value = P.stdWords || 600; $("#sAuto").checked = C.autoOn !== false;  $("#pExpFee").value = P.expressFee || ""; $("#pRevFee").value = P.reviewFee || ""; $("#pExpH").value = P.expressHours || 1; $("#pKeep").value = P.keepSrcDays || 30; $("#pFix").value = P.fixPerError || 2500;
   $("#sNotify").value = NOTIFY || "";
   $("#bBank").value = BANK.bank; $("#bHolder").value = BANK.holder; $("#bAcc").value = BANK.acc; $("#bPickup").value = BANK.pickup;
   $("#stampImg").src = B.stamp || STAMP_DEFAULT; $("#logoImg").src = B.logo || LOGO_DEFAULT; if ($("#embImg")) $("#embImg").src = B.emblem || EMBLEM_DEFAULT;
 }
 const num = v => Number(String(v).replace(/[^\d]/g,"")) || 0;
-$("#sLayout").onchange = async () => { C.layoutFrame = $("#sLayout").checked; delete C.layoutMode; try { await saveDoc("config/main", C); toast(C.layoutFrame ? "Хүрээ, лого хуулах горим асаалаа." : "Цэвэр бичвэр хэлбэрээр орчуулна."); } catch(e){ toast("Хадгалж чадсангүй."); } };
 $("#sSave").onclick = async () => {
-  C.prefix = $("#sPrefix").value.trim() || "MO26"; C.last = num($("#sLast").value); C.translator = $("#sTrans").value.trim();
+  C.prefix = $("#sPrefix").value.trim() || "MO26"; C.last = num($("#sLast").value); C.pad = num($("#sPad").value) || numPad(); C.translator = $("#sTrans").value.trim();
   P.cert = num($("#pCert").value); P.min = num($("#pMin").value); P.refPct1 = num($("#pRef1").value); P.refPct2 = num($("#pRef2").value); P.refSwitch = $("#pRefD").value || "2027-01-01"; P.refMin = num($("#pRefMin").value) || 10000; P.courier = num($("#pCourier").value); P.freeOver = num($("#pFree").value); P.reopen = num($("#pReopen").value);
-  P.tplPage = num($("#pTplP").value) || 15000; P.pageMn = num($("#pMnP").value) || 25000; P.pageFF = num($("#pFFP").value) || 40000; P.stdChars = num($("#pStdC").value) || 1800; P.stdWords = num($("#pStd").value) || 600; C.autoOn = $("#sAuto").checked; C.layoutFrame = $("#sLayout").checked; delete C.layoutMode; P.expressFee = num($("#pExpFee").value); P.reviewFee = num($("#pRevFee").value); P.expressHours = num($("#pExpH").value) || 1; P.keepSrcDays = num($("#pKeep").value) || 30; P.fixPerError = num($("#pFix").value) || 2500; P.risk = 0;
+  P.tplPage = num($("#pTplP").value) || 15000; P.pageMn = num($("#pMnP").value) || 25000; P.pageFF = num($("#pFFP").value) || 40000; P.stdChars = num($("#pStdC").value) || 1800; P.stdWords = num($("#pStd").value) || 600; C.autoOn = $("#sAuto").checked; C.layoutFrame = false; delete C.layoutMode; P.expressFee = num($("#pExpFee").value); P.reviewFee = num($("#pRevFee").value); P.expressHours = num($("#pExpH").value) || 1; P.keepSrcDays = num($("#pKeep").value) || 30; P.fixPerError = num($("#pFix").value) || 2500; P.risk = 0;
   Object.assign(BANK, { bank:$("#bBank").value.trim(), holder:$("#bHolder").value.trim(), acc:$("#bAcc").value.trim(), pickup:$("#bPickup").value.trim() });
   NOTIFY = $("#sNotify").value.trim(); if (NOTIFY && !/^\S+@\S+\.\S+$/.test(NOTIFY)){ toast("Мэдэгдлийн имэйл хаяг буруу байна."); return; }
   await saveDoc("config/main", { ...C }); await saveDoc("config/public", { prices:P, bank:BANK, notify:NOTIFY });
@@ -3648,31 +3659,32 @@ $("#embReset").onclick = async () => { B.emblem = null; await saveBrand(); };
 /* ---------- Templates ---------- */
 function renderTpl(){
   const box = $("#tplList"); box.innerHTML = "";
-  if (!TPL.length) box.appendChild(el("p", "hint", "Маягт алга."));
-  TPL.forEach((t, i) => {
-    const w = el("div", "pg-ed");
-    const hd = el("header"); const nm = el("input"); nm.value = t.name; nm.placeholder = "Баримтын төрөл"; nm.style.cssText = "flex:1;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--field);margin-right:8px";
-    nm.oninput = () => t.name = nm.value;
-    const rm = el("button", null, "Устгах"); rm.onclick = () => { TPL.splice(i,1); renderTpl(); };
-    const au = h(`<label style="display:flex;gap:4px;align-items:center;font-size:13px;margin-right:8px;white-space:nowrap"><input type="checkbox" ${t.review ? "checked" : ""}>Миний хяналтаар</label>`); au.querySelector("input").onchange = e => t.review = e.target.checked;
-    hd.append(nm, au, rm);
-    const ta = el("textarea", "paper"); ta.rows = 5; ta.value = t.text || ""; ta.placeholder = "Маягтын бичвэр (заавал биш, зураг оруулсан бол хоосон байж болно)"; ta.oninput = () => t.text = ta.value;
-    // 2026-11-22: маягтыг зургаар оруулна (config/tplimg_<id> баримтад хадгална)
-    const ib = h(`<div><div class="thumbs"></div><label class="btn" style="margin-top:4px">🖼 Маягтын зураг оруулах<input type="file" accept="image/*,application/pdf,.pdf" multiple hidden></label></div>`);
-    const th = ib.querySelector(".thumbs");
-    const drawT = () => { th.innerHTML = ""; (t.imgs || []).forEach((id, k) => { const d = el("div", "thumb"); const im = el("img"); im.alt = ""; loadDoc("config/tplimg_" + id).then(x => { if (x && x.img) im.src = x.img; }).catch(() => {}); const x = el("button", null, "×"); x.onclick = () => { t.imgs.splice(k, 1); drawT(); }; d.append(im, el("span", null, k + 1), x); th.appendChild(d); }); };
-    ib.querySelector("input").onchange = async e => {
-      for (const f of e.target.files){
-        try { const pages = await fileToPages(f); for (const pgx of pages){ if (!pgx.img) continue; const url = pgx.img; const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); await saveDoc("config/tplimg_" + id, { img:url }); (t.imgs = t.imgs || []).push(id); } }
-        catch(err){ toast("Зургийг оруулж чадсангүй."); }
-      }
-      e.target.value = ""; drawT(); toast("Маягтын зураг нэмэгдлээ. «Тохиргоог хадгалах» дарна уу.");
-    };
-    drawT();
-    w.append(hd, ib, ta); box.appendChild(w);
+  if (!TPL.length){ box.appendChild(el("p", "hint", "Маягт алга. SAMPLES хавтсанд жишиг оруулаад «SAMPLES хавтаснаас шинэчлэх» дарна уу.")); return; }
+  TPL.forEach(t => {
+    const w = h(`<div class="ord" style="padding:8px 12px;margin:6px 0;display:flex;align-items:center;gap:10px"><div style="flex:1"><b>${esc(t.name)}</b>${t.pages > 1 ? ` <span class="hint">· ${t.pages} хуудас</span>` : ""}</div><label style="display:flex;gap:4px;align-items:center;font-size:13px;white-space:nowrap"><input type="checkbox" ${t.review ? "checked" : ""}>Миний хяналтаар</label></div>`);
+    w.querySelector("input").onchange = async e => { t.review = e.target.checked; await saveDoc("private/templates", { list:TPL }); await saveDoc("config/templates", { list:TPL }); toast("Хадгаллаа."); };
+    box.appendChild(w);
   });
 }
-$("#tplAdd").onclick = () => { TPL.push({ name:"", text:"", imgs:[] }); renderTpl(); };
+// 2026-11-23: маягтын жагсаалт = TrAI/SAMPLES хавтасны жишгүүд (нэрээр нь). «Миний хяналтаар» тэмдэглэгээ хадгалагдана.
+const sampleBase = t => String(t || "").replace(/\.(jpe?g|png|pdf|docx?)$/i, "").replace(/\s*\(\d+\)\s*$/, "").trim();
+async function syncSamples(manual){
+  const m = await withTimeout(cap("mcp"), 11000);
+  if (!m){ if (manual) toast("Google Drive-д холбогдож чадсангүй."); return false; }
+  let files;
+  try { const r = await m.callTool("Google Drive", "search_files", { query:`parentId = '${SAMPLE_FOLDER}' and trashed = false`, pageSize:100, excludeContentSnippets:true }); files = ((((r && (r.payload || r)) || {}).files) || []).filter(f => /image\/(jpe?g|png|webp)|pdf|wordprocessingml|msword/.test(f.mimeType || "")); }
+  catch(e){ if (manual) toast("SAMPLES хавтсыг уншиж чадсангүй."); return false; }
+  SAMPLE_LIST = files;
+  const cnt = {}; files.forEach(f => { const b = sampleBase(f.title); if (b) cnt[b] = (cnt[b] || 0) + 1; });
+  const norm = x => String(x || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const list = Object.keys(cnt).sort((a, b) => a.localeCompare(b)).map(name => { const old = TPL.find(t => norm(t.name) === norm(name)); return { name, pages:cnt[name], src:"samples", review: !!(old && old.review) }; });
+  const changed = JSON.stringify(list) !== JSON.stringify(TPL);
+  if (changed || manual){ TPL = list; await saveDoc("private/templates", { list:TPL }); await saveDoc("config/templates", { list:TPL }); }
+  renderTpl();
+  if (manual) toast(`SAMPLES: ${list.length} маягт.`);
+  return true;
+}
+$("#tplSync").onclick = () => syncSamples(true);
 
 /* ---------- Tabs, toast ---------- */
 async function renderRefAdmin(){
@@ -3751,6 +3763,7 @@ const unlockBtn = b => { if (!b) return; b.classList.remove("busy"); if (b.datas
   if (OWNER){
     await loadReg();
     const tp = await loadDoc("private/templates"); TPL = withBuiltins(tp && Array.isArray(tp.list) ? tp.list : []); renderTpl();
+    syncSamples(false).catch(() => {});   // 2026-11-23: SAMPLES хавтастай тулгана
     if (TPL.length){ const pubT = await loadDoc("config/templates"); if (!pubT || JSON.stringify(pubT.list) !== JSON.stringify(TPL)) saveDoc("config/templates", { list:TPL }); }
     if (DB){ try { const q = await withTimeout(DB.collection("numbers").limit(1000).get(), 10000); if (q) NUMS = q.docs.map(d => d.id); } catch(e){} } else NUMS = Object.keys(LS.get("numbers") || {});
     if (!LS.get("numIndexV1")){ (async () => { const phones = [...new Set(REG.map(r => digits(r.phone)).filter(x => x.length >= 6))]; for (const ph of phones){ try { for (const e of await archiveGet(ph)) await archivePutNum({ ...e, phone:e.phone || ph }); } catch(x){} } LS.set("numIndexV1", 1); })(); }
