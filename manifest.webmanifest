@@ -1,16 +1,31 @@
 {
-  "name": "Мон-Оффсет баталгаат орчуулга",
-  "short_name": "Мон-Оффсет",
-  "description": "Баталгаат орчуулга захиалах — Мон-Оффсет ХХК",
+  "name": "UT орчуулга",
+  "short_name": "UT орчуулга",
+  "description": "Баталгаат орчуулга захиалах — UT орчуулга (Мон-Оффсет ХХК)",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#d3ccba",
-  "theme_color": "#423d33",
+  "background_color": "#f3e6d3",
+  "theme_color": "#5b3a29",
   "lang": "mn",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
