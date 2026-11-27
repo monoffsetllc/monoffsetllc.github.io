@@ -162,6 +162,7 @@ window.MO_APP_URL = "https://app.monoffset.com/";
   /* 2026-11-23: захиалгын түлхүүрийг солих (шинэ захиалга / дуусаагүй захиалга руу шилжих) ба утсаар дуусаагүй захиалга хайх */
   window.MO_SETUID = function(v){ if (TOKEN) return null; if (v === undefined) v = "c" + rid(); if (!UID_RE.test(String(v))) return null; UIDV = v; ls("uid", v); return v; };
   window.MO_DRAFTS = function(phone){ return call("drafts", { phone:phone, base:(window.MO_APP_URL && window.MO_APP_URL.indexOf("<" + "?") < 0) ? window.MO_APP_URL : "" }); };
+  window.MO_PING = function(ev){ return call("ping", { ev:ev, base:(window.MO_APP_URL && window.MO_APP_URL.indexOf("<" + "?") < 0) ? window.MO_APP_URL : "" }).catch(function(){ return null; }); };   /* 2026-11-27: утсанд push мэдэгдэл (ntfy) */
   window.MO_LOGOUT = function(){ ls("token", null); location.hash = ""; location.reload(); };
 
   var caps = { db:db, sample:sample, mcp:mcp, user:user };
@@ -605,6 +606,7 @@ details *{box-sizing:border-box}.refbox>summary::-webkit-details-marker{display:
       <label class="f">Дансны дугаар<input id="bAcc"></label>
       <label class="f">Өөрөө ирж авах хаяг<input id="bPickup"></label>
     </div>
+    <label class="f">Банкны QR кодын текст (EMV, «000201…» гэж эхэлнэ) — төлбөрийн цонхонд дүн, гүйлгээний утгатай QR үүсгэнэ. Хоосон бол QR харуулахгүй.<textarea id="bQR" rows="3" spellcheck="false" style="font-family:monospace;font-size:12px"></textarea></label>
     <div class="card">
       <h2>Автомат орчуулга</h2>
       <label class="check"><input type="checkbox" id="sAuto"><span>AI автомат орчуулга идэвхтэй<br><small style="color:var(--muted)">Унтраавал төлбөр баталсны дараа AI ажиллахгүй, та гараар орчуулна</small></span></label>
@@ -630,6 +632,13 @@ details *{box-sizing:border-box}.refbox>summary::-webkit-details-marker{display:
       <h2>Утсан дээрх мэдэгдэл</h2>
       <p class="hint">Харилцагч төлбөр төлсөн, засвар илгээсэн, гомдол, тусламж хүссэн үед энэ имэйл рүү мэдэгдэл очно. Утсан дээрээ Gmail апп суулгаж, энэ хаягаар нэвтэрч мэдэгдлийг асаана. Хоосон бол ${"monoffsetllc@gmail.com"} руу очно (өөрөөсөө өөр рүү илгээсэн имэйл утсан дээр дуугардаггүй байж болзошгүй тул өөр хаяг оруулахыг зөвлөж байна).</p>
       <label class="f">Мэдэгдэл хүлээн авах имэйл<input id="sNotify" inputmode="email" autocomplete="off" placeholder="name@gmail.com"></label>
+    </div>
+    <div class="note" id="ntfyBox" style="margin:4px 0 12px">
+      <p><b>📲 Утсанд шууд мэдэгдэл (ntfy)</b> — апп нээлттэй эсэхээс үл хамааран шинэ захиалга, төлбөр, засвар, гомдол ирэхэд утас дуугарна.</p>
+      <ol style="margin:4px 0 8px 18px;padding:0;line-height:1.6"><li>Утсандаа <b>ntfy</b> аппыг App Store / Play Store-оос суулгана.</li><li>Доорх «Сэдэв үүсгэх» дарж хадгална.</li><li>ntfy апп дээр <b>+</b> дарж доорх сэдвийг яг адилхан бичээд «Subscribe» дарна.</li><li>«Туршилт илгээх» дарж утас дуугарч байгаа эсэхийг шалгана.</li></ol>
+      <label class="f">ntfy сэдэв (нууц)<input id="sNtfy" autocomplete="off" spellcheck="false" placeholder="ut-orchuulga-..."></label>
+      <div class="row"><button id="ntfyGen" class="btn ghost" data-nolock>Сэдэв үүсгэх</button><button id="ntfyTest" class="btn ghost" data-nolock>Туршилт илгээх</button></div>
+      <p class="hint" id="ntfyHint">Сэдвийг бусдад бүү хэлээрэй — мэдсэн хүн таны мэдэгдлийг харах боломжтой. Мэдэгдэлд харилцагчийн утас, хаяг орохгүй.</p>
     </div>
     <button id="sSave" class="btn primary wide" style="margin-bottom:14px">Тохиргоог хадгалах</button>
     <div class="card">
@@ -694,7 +703,7 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}.${pad2(d.
 const S = { dir:"toMN", src:"Англи", mode:"img", images:[], pages:[""], num:"", date:today(), name:"", phone:"", email:"", seal:true, savedNum:null, orderUid:null };
 const C = { prefix:"MO26", last:0, translator:"", autoOn:true };
 const P = { to:{}, from:{}, cert:0, min:0, courier:15000, freeOver:200000, reopen:0, stdWords:600, fixPerError:2500, expressFee:0, expressHours:1, keepSrcDays:30, pageTarget:35000, risk:5, bulkPages:20, bulkOff:10, tplPage:15000, pageMn:25000, pageFF:40000, stdChars:1800 };
-const BANK = { bank:"Голомт банк", holder:"Мон-Оффсет ХХК", acc:"81001500 1801136049", pickup:"4-р хороолол, Парадоксын автобусны буудал, U&K тауэр" };
+const BANK = { bank:"Хас банк", holder:"Э.Уянгатөгс", acc:"MN730032005002495504", qr:"0002010102121531279404962794049600261113610780527540014A00000084300010108CAXBMNUB0220lI4zaZsAAbuBt_MEmMMf5204829953034965802MN5921UYaNGATUGS ENKHTAIVAN6011ULAANBAATAR625701152000000009208880510shiljuuleg0720lI4zaZsAAbuBt_MEmMMf7106QPP_QR78152000000009208887902148002026304F6B3", pickup:"4-р хороолол, Парадоксын автобусны буудал, U&K тауэр" };
 const B = { stamp:null, logo:null, emblem:null };
 const BUILTIN_TPL = [
  { name:"Хуулийн этгээдийн улсын бүртгэлийн гэрчилгээ (1-р хуудас гэрчилгээ, 2-р хуудас нэмэлт өөрчлөлтийн бүртгэл) — Монгол → Англи", builtin:true, text:
@@ -1053,6 +1062,28 @@ function qrPng(text){
   const n = q.getModuleCount(), cell = 8, c = document.createElement("canvas"); c.width = c.height = n*cell;
   const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0,0,c.width,c.height); x.fillStyle = "#000";
   for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r,k)) x.fillRect(k*cell, r*cell, cell, cell);
+  return c.toDataURL("image/png");
+}
+
+// 2026-11-27: Банкны EMV QR — захиалга бүрт дүн (54) ба гүйлгээний утга (62/05)-тай QR үүсгэнэ
+function emvCrc(d){ let c = 0xFFFF; for (let i = 0; i < d.length; i++){ c ^= d.charCodeAt(i) << 8; for (let k = 0; k < 8; k++) c = (c & 0x8000) ? ((c << 1) ^ 0x1021) & 0xFFFF : (c << 1) & 0xFFFF; } return c.toString(16).toUpperCase().padStart(4, "0"); }
+function emvTlv(s){ const out = []; let i = 0; while (i + 4 <= s.length){ const t = s.slice(i, i + 2), l = parseInt(s.slice(i + 2, i + 4), 10); if (isNaN(l)) return null; out.push([t, s.slice(i + 4, i + 4 + l)]); i += 4 + l; } return i === s.length ? out : null; }
+function emvParse(s){ s = String(s || "").trim(); if (!/^000201/.test(s) || s.slice(-8, -4) !== "6304" || emvCrc(s.slice(0, -4)) !== s.slice(-4).toUpperCase()) return null; return emvTlv(s.slice(0, -8)); }
+const emvF = (t, v) => t + String(v.length).padStart(2, "0") + v;
+function emvWith(base, amount, memo){
+  const top = emvParse(base); if (!top) return "";
+  const map = new Map(top);
+  if (amount > 0) map.set("54", String(Math.round(amount)));
+  const ref = String(memo || "").replace(/[ЗЗ]/g, "Z").replace(/[^A-Za-z0-9 -]/g, "").trim().slice(0, 25);
+  if (ref){ const sub = emvTlv(map.get("62") || "") || []; const sm = new Map(sub); sm.set("05", ref); map.set("62", [...sm.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([t, v]) => emvF(t, v)).join("")); }
+  const body = [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([t, v]) => emvF(t, v)).join("") + "6304";
+  return body + emvCrc(body);
+}
+function qrPngM(text, cell = 8, margin = 4){
+  const q = qrcode(0, "M"); q.addData(text); q.make();
+  const n = q.getModuleCount(), w = (n + margin * 2) * cell, c = document.createElement("canvas"); c.width = c.height = w;
+  const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, w, w); x.fillStyle = "#000";
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) x.fillRect((k + margin) * cell, (r + margin) * cell, cell, cell);
   return c.toDataURL("image/png");
 }
 
@@ -1759,7 +1790,9 @@ function phoneAlert(patch){
   else if (patch.complaint && patch.complaint.status === "new") what = "Гомдол ирлээ";
   else if (patch.namesHelp && patch.namesHelp.status === "new" && !patch.status) what = "Нэрийн латин бичлэгт тусламж хүслээ";
   else if (Array.isArray(patch.requests) && patch.requests.some(r => r && r.status === "new" && Date.now() - (r.at || 0) < 120000)) what = "Шинэ хүсэлт ирлээ";
+  if (patch.status === "quoted" && typeof window.MO_PING === "function") window.MO_PING("new");   // 2026-11-27: шинэ захиалга — утсанд push
   if (!what) return;
+  if (typeof window.MO_PING === "function") window.MO_PING(patch.status === "claimed" ? "claimed" : patch.status === "revision" ? "revision" : patch.complaint ? "complaint" : patch.namesHelp ? "names" : "request");
   const id = o.num || o.oid || "";
   gmail({ to:[NOTIFY || OFFICE_EMAIL], subject:`🔔 Мон-Оффсет: ${what}${id ? " — " + id : ""}`,
     body:`${what}\n\nЗахиалга: ${id || "-"}\nХарилцагч: ${o.name || "-"}, ${o.phone || "-"}\n${o.srcLang ? `Хэл: ${o.srcLang} → ${o.tgtLang}\n` : ""}\nАдмин хуудас: ${ADMIN_URL}` }).catch(() => {});
@@ -2353,6 +2386,7 @@ function payModal(o, amount, kind, extra, onPaid){
       <span class="k">Дүн</span><span class="v">${money(amount)}</span><button data-copy="${Math.round(amount)}">Хуулах</button>
       <span class="k">Гүйлгээний утга</span><span class="v">${esc(o.num || o.oid)} ${esc(o.phone)}</span><button data-copy="${esc((o.num || o.oid) + " " + o.phone)}">Хуулах</button>
     </div>
+    ${(() => { try { const pq = BANK.qr && emvWith(BANK.qr, amount, `${o.num || o.oid || ""} ${digits(o.phone || "")}`); if (!pq) return ""; const src = qrPngM(pq); return `<div class="payqr" style="text-align:center;margin:12px 0 4px"><p class="hint" style="margin:0 0 6px"><b>QR кодоор төлөх</b> — банкны апп-аар уншуулахад манай данс автоматаар гарна.</p><img src="${src}" alt="Төлбөрийн QR" style="width:220px;max-width:70vw;image-rendering:pixelated;border:1px solid var(--line);border-radius:10px"><div><a class="btn ghost" download="UT-tolbor-${esc(String(o.num || o.oid || "").replace(/[^\w-]/g, ""))}.png" href="${src}" data-nolock style="margin-top:6px;display:inline-block">QR-ийг зургаар хадгалах</a></div><div class="note warn" style="font-size:14px;margin:8px 0 0;text-align:left"><p style="margin:0">⚠️ QR уншуулсны дараа <b>дүн</b> болон <b>гүйлгээний утгыг</b> заавал бичнэ үү:<br>Дүн: <b>${money(amount)}</b><br>Утга: <b>${esc(String(o.num || o.oid || "") + " " + digits(o.phone || ""))}</b></p></div>${IS_MOBILE ? `<p class="hint" style="margin:4px 0 0">Утсаараа төлөх бол QR-ийг хадгалаад банкны апп-ын «QR уншуулах» → зургийн сангаас сонгоно.</p>` : ""}</div>`; } catch(e){ return ""; } })()}
     <p class="hint" style="margin:12px 0 4px">${IS_MOBILE ? "Банкны апп-аар шилжүүлэх" : "Интернэт банкаар шилжүүлэх"} (дансны дугаар, дүнг дээрээс хуулаад буулгана уу):</p>
     <div class="bankapps">${BANK_APPS.map(bankBadge).join("")}</div>
     ${extra === "agree" ? `<div class="note warn" style="font-size:14px">${AGREE}</div>` : ""}
@@ -2934,8 +2968,20 @@ function alertOwner(cnt){
   if (!cnt) stopRing();
   lastNeed = cnt; document.title = cnt ? `(${cnt}) Мон-Оффсет` : "Мон-Оффсет баталгаат орчуулга";
 }
+const refCrediting = new Set();
+let BANKIN = null;
+async function loadBankIn(){ if (!DB || !OWNER) return; try { BANKIN = await loadDoc("private/bankin"); } catch(e){} }
+function bankInCard(){
+  const its = ((BANKIN && BANKIN.items) || []).filter(x => x.status === "unmatched" && !x.seen && Date.now() - (x.at || 0) < 14 * 86400000);
+  if (!its.length) return null;
+  const c = h(`<div class="ord" style="border-left:4px solid var(--warn,#c98a00)"><h3 style="margin:0 0 6px">💵 Захиалгатай тулгагдаагүй орлого (${its.length})</h3><p class="hint" style="margin:0 0 6px">Хас банкны мэдэгдлээс уншсан боловч гүйлгээний утгаар захиалга олдсонгүй. Захиалгын карт дээр гараар баталгаажуулна уу.</p></div>`);
+  its.forEach(x => { const r = h(`<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><div style="flex:1"><b>${money(x.amount)}</b> · ${esc(x.memo || "-")} <span class="hint">${new Date(x.at).toLocaleString("mn-MN")}</span></div><button class="btn ghost" data-nolock>Нуух</button></div>`);
+    r.querySelector("button").onclick = async () => { x.seen = Date.now(); await saveDoc("private/bankin", BANKIN); renderOrders(); }; c.appendChild(r); });
+  return c;
+}
 function renderOrders(){
   const box = $("#ordList"); box.innerHTML = "";
+  { const bc = bankInCard(); if (bc) box.appendChild(bc); }
   const list = ORDERS.filter(o => o.status && !(o.status === "new" && !o.oid)).sort((a,b) => (needsMe(b) - needsMe(a)) || (b.updatedAt||0) - (a.updatedAt||0));
   const cnt = ORDERS.filter(needsMe).length; const bd = $("#ordBadge"); bd.hidden = !cnt; bd.textContent = cnt; alertOwner(cnt);
   ORDERS.filter(raPending).forEach(o => box.appendChild(reaccessCard(o)));
@@ -2959,6 +3005,7 @@ function orderCard(o){
   }; acts.appendChild(b); return b; };
   if (false && o.analysis && o.analysis.bilingual && o.analysis.consistent === false) body.appendChild(h(`<div class="note warn" style="font-size:14px"><p>Хэл хоорондын зөрүү: ${esc((o.analysis.differences||[]).join("; "))}</p></div>`));
   if (o.ref) body.appendChild(h(`<p class="hint" style="margin:2px 0 6px">🤝 Санал болгосон код: <b>${esc(o.ref)}</b></p>`));
+  if (o.bankPaid) body.appendChild(h(`<p class="hint" style="margin:2px 0 6px">🏦 Хас банкны мэдэгдлээр автоматаар бүртгэгдсэн: ${(o.payments || []).filter(x => x.src === "bank").map(x => money(x.amount) + (x.memo ? " («" + esc(x.memo) + "»)" : "")).join(", ")}</p>`));
   if (o.clientError && Date.now() - (o.clientError.at || 0) < 7 * 86400000) body.appendChild(h(`<p class="hint" style="margin:2px 0 6px;color:var(--seal)">⚠ Харилцагчийн дэлгэц дээр алдаа: ${esc(String(o.clientError.msg || "").split("\n")[0].slice(0, 140))}</p>`));
   if (o.quote && o.quote.total){   // 2026-11-22: үнийн тооцооны дэлгэрэнгүйг зөвхөн админд
     body.appendChild(h(`<details class="help" style="margin:4px 0 8px"><summary>Үнийн тооцоо</summary><table class="q">${quoteRows(o.quote)}<tr class="tot"><td>Нийт дүн (НӨАТ ороогүй)</td><td class="n">${money(o.quote.total)}</td></tr></table></details>`));
@@ -3633,7 +3680,11 @@ function fillSettings(){
   $("#pCert").value = P.cert || ""; $("#pMin").value = P.min || ""; $("#pRef1").value = P.refPct1 != null ? P.refPct1 : 10; $("#pRef2").value = P.refPct2 != null ? P.refPct2 : 5; $("#pRefD").value = P.refSwitch || "2027-01-01"; $("#pRefMin").value = P.refMin || 10000; $("#pCourier").value = P.courier; $("#pFree").value = P.freeOver; $("#pReopen").value = P.reopen || "";
   $("#pTplP").value = P.tplPage || 15000; $("#pMnP").value = P.pageMn || 25000; $("#pFFP").value = P.pageFF || 40000; $("#pStdC").value = P.stdChars || 1800; $("#pStd").value = P.stdWords || 600; $("#sAuto").checked = C.autoOn !== false;  $("#pExpFee").value = P.expressFee || ""; $("#pRevFee").value = P.reviewFee || ""; $("#pExpH").value = P.expressHours || 1; $("#pKeep").value = P.keepSrcDays || 30; $("#pFix").value = P.fixPerError || 2500;
   $("#sNotify").value = NOTIFY || "";
-  $("#bBank").value = BANK.bank; $("#bHolder").value = BANK.holder; $("#bAcc").value = BANK.acc; $("#bPickup").value = BANK.pickup;
+  loadDoc("private/notify").then(d => { $("#sNtfy").value = (d && d.ntfy) || ""; }).catch(() => {});
+  if (typeof window.MO_PING !== "function"){ $("#ntfyTest").disabled = true; $("#ntfyHint").textContent = "Утасны push мэдэгдэл зөвхөн вэб болон утасны апп хувилбар дээр ажиллана."; }
+  $("#ntfyGen").onclick = e => { const g = e.currentTarget; if ($("#sNtfy").value.trim() && !g.dataset.arm){ g.dataset.arm = "1"; g.textContent = "Дахин дарж солих"; toast("Шинэ сэдэв үүсгэвэл ntfy апп дээр дахин бүртгүүлэх шаардлагатай."); return; } delete g.dataset.arm; g.textContent = "Сэдэв үүсгэх"; $("#sNtfy").value = "ut-orchuulga-" + Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8); toast("Сэдэв үүсгэлээ. «Тохиргоог хадгалах» дарна уу."); };
+  $("#ntfyTest").onclick = async () => { const b = $("#ntfyTest"); b.disabled = true; try { await saveDoc("private/notify", { ntfy: $("#sNtfy").value.trim() }); const r = await window.MO_PING("test"); toast(r && r.ok ? "Туршилтын мэдэгдэл илгээлээ. Утсаа шалгана уу." : "Илгээж чадсангүй: " + ((r && r.err) || "сэдэв хоосон эсвэл Code.gs шинэчлэгдээгүй")); } catch(e){ toast("Илгээж чадсангүй (Code.gs-ийг шинэчилсэн эсэхээ шалгана уу)."); } b.disabled = false; };
+  $("#bBank").value = BANK.bank; $("#bHolder").value = BANK.holder; $("#bAcc").value = BANK.acc; $("#bPickup").value = BANK.pickup; $("#bQR").value = BANK.qr || "";
   $("#stampImg").src = B.stamp || STAMP_DEFAULT; $("#logoImg").src = B.logo || LOGO_DEFAULT; if ($("#embImg")) $("#embImg").src = B.emblem || EMBLEM_DEFAULT;
 }
 const num = v => Number(String(v).replace(/[^\d]/g,"")) || 0;
@@ -3641,9 +3692,11 @@ $("#sSave").onclick = async () => {
   C.prefix = $("#sPrefix").value.trim() || "MO26"; C.last = num($("#sLast").value); C.pad = num($("#sPad").value) || numPad(); C.translator = $("#sTrans").value.trim();
   P.cert = num($("#pCert").value); P.min = num($("#pMin").value); P.refPct1 = num($("#pRef1").value); P.refPct2 = num($("#pRef2").value); P.refSwitch = $("#pRefD").value || "2027-01-01"; P.refMin = num($("#pRefMin").value) || 10000; P.courier = num($("#pCourier").value); P.freeOver = num($("#pFree").value); P.reopen = num($("#pReopen").value);
   P.tplPage = num($("#pTplP").value) || 15000; P.pageMn = num($("#pMnP").value) || 25000; P.pageFF = num($("#pFFP").value) || 40000; P.stdChars = num($("#pStdC").value) || 1800; P.stdWords = num($("#pStd").value) || 600; C.autoOn = $("#sAuto").checked; C.layoutFrame = false; delete C.layoutMode; P.expressFee = num($("#pExpFee").value); P.reviewFee = num($("#pRevFee").value); P.expressHours = num($("#pExpH").value) || 1; P.keepSrcDays = num($("#pKeep").value) || 30; P.fixPerError = num($("#pFix").value) || 2500; P.risk = 0;
-  Object.assign(BANK, { bank:$("#bBank").value.trim(), holder:$("#bHolder").value.trim(), acc:$("#bAcc").value.trim(), pickup:$("#bPickup").value.trim() });
+  Object.assign(BANK, { bank:$("#bBank").value.trim(), holder:$("#bHolder").value.trim(), acc:$("#bAcc").value.trim(), pickup:$("#bPickup").value.trim(), qr:$("#bQR").value.replace(/\s+/g, "") });
+  if (BANK.qr && !emvParse(BANK.qr)){ toast("Банкны QR текст буруу байна (CRC таарахгүй)."); return; }
   NOTIFY = $("#sNotify").value.trim(); if (NOTIFY && !/^\S+@\S+\.\S+$/.test(NOTIFY)){ toast("Мэдэгдлийн имэйл хаяг буруу байна."); return; }
   await saveDoc("config/main", { ...C }); await saveDoc("config/public", { prices:P, bank:BANK, notify:NOTIFY });
+  { const t = $("#sNtfy").value.trim(); if (t && !/^[A-Za-z0-9_-]{8,64}$/.test(t)){ toast("ntfy сэдэв зөвхөн латин үсэг, тоо, - _ (8–64 тэмдэгт) байна."); return; } await saveDoc("private/notify", { ntfy:t }); }
   TPL = TPL.filter(t => (t.name || "").trim() || (t.text || "").trim() || (t.imgs || []).length); await saveDoc("private/templates", { list:TPL }); await saveDoc("config/templates", { list:TPL }); renderTpl();
   if (!S.orderUid && S.savedNum !== S.num){ S.num = nextNum(); $("#num").value = S.num; }
   schedulePreview(); toast("Тохиргоо хадгалагдлаа.");
@@ -3775,13 +3828,14 @@ const unlockBtn = b => { if (!b) return; b.classList.remove("busy"); if (b.datas
     if (!RING.armed) $("#ringArm").hidden = false;
     S.num = nextNum(); syncEditorFields(); renderEditors(); fillSettings(); renderReg();
     let busy = false;
-    watchAll(async list => { ORDERS = list; renderOrders(); renderAudit();
+    watchAll(async list => { ORDERS = list; renderOrders(); renderAudit(); if (Date.now() - (window._bkAt || 0) > 60000){ window._bkAt = Date.now(); loadBankIn().then(() => renderOrders()).catch(() => {}); }
       list.forEach(o => {
         const pr = o.progress || {};
         const orphan = o.status === "translating" && !o.draftError && !drafting.has(o.uid) && (pr.at ? Date.now() - pr.at > 90000 : Date.now() - (o.updatedAt || 0) > 90000);
         if (orphan && C.autoOn !== false && !resumed.has(o.uid)){ resumed.add(o.uid); autoDraft(o); }
         if (o.status === "done" && o.delivery && o.delivery.method === "email" && !o.delivery.mailedAt && !o.delivery.mailError) sendDelivery(o);
         if (o.status === "done" && !o.driveId && !o.driveError) driveSaveOrder(o);
+        if (o.bankPaid && o.ref && !o.refCredited && Number(o.received) > 0 && !refCrediting.has(o.uid)){ refCrediting.add(o.uid); refCredit(o).then(() => orderUpd(o.uid, { refCredited:Date.now() })).catch(() => {}); }   // 2026-11-27: банкаар автоматаар баталгаажсан захиалгын урамшуулал
         if (o.status === "review" && o.email && !o.readyMailed && !o.readyMailError && (o.readyAt || 0) > Date.parse("2026-11-18T14:00:00Z") && !readyMailing.has(o.uid)){ readyMailing.add(o.uid); notifyReady({ ...o, num: o.num || (o.translation || {}).num }); }
         (o.requests || []).forEach(r => { if (r.status === "new" && r.method === "email" && !r.error) sendRequestEmail(o, r); });
       }); if (!busy){ busy = true; try { await syncRegister(); } finally { busy = false; } } });
